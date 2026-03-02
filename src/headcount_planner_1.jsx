@@ -1,5 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 
+// ── Mobile detection ──────────────────────────────────────────────
+function useIsMobile() {
+  const [mobile, setMobile] = useState(() => window.innerWidth < 640);
+  useEffect(() => {
+    const fn = () => setMobile(window.innerWidth < 640);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, []);
+  return mobile;
+}
+
 // ── Storage shim ──────────────────────────────────────────────────
 if (!window.storage) {
   window.storage = {
@@ -308,6 +319,8 @@ function RolesTab({roles,setRoles,tax,ot}) {
 // ── Plan Tab — Day-by-day scheduling grid ─────────────────────────
 function PlanTab({roles,plans,setPlans,tax,ot}) {
   const [selectedWeek,setSelectedWeek]=useState(isoMonday(toMonday(new Date())));
+  const [activeDayIdx,setActiveDayIdx]=useState(()=>{ const d=new Date().getDay(); return d===0?6:d-1; });
+  const isMobile=useIsMobile();
   const active=roles.filter(r=>r.active);
   const weekPlans=plans.filter(p=>p.weekOf===selectedWeek);
   const O=ot||DEFAULT_OT;
@@ -388,7 +401,104 @@ function PlanTab({roles,plans,setPlans,tax,ot}) {
         ))}
       </div>
 
-      {/* Table */}
+      {/* Table — desktop: all 7 days; mobile: single day with nav */}
+      {isMobile ? (
+        <div>
+          {/* Day selector */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px",backgroundColor:CN.white,borderRadius:"12px",padding:"10px 14px",border:`1.5px solid ${CN.border}`}}>
+            <button onClick={()=>setActiveDayIdx(i=>(i+6)%7)}
+              style={{border:"none",background:CN.creamDark,borderRadius:"8px",padding:"8px 14px",cursor:"pointer",fontSize:"16px",fontWeight:700,color:CN.dark}}>←</button>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"20px",color:CN.dark,textTransform:"uppercase",letterSpacing:"0.06em"}}>{DAY_LABELS[activeDayIdx]}</div>
+              <div style={{fontSize:"11px",color:CN.mid}}>{dayTotals[DAYS[activeDayIdx]]>0?dayTotals[DAYS[activeDayIdx]].toFixed(1)+"h total":"No hours"}</div>
+            </div>
+            <button onClick={()=>setActiveDayIdx(i=>(i+1)%7)}
+              style={{border:"none",background:CN.creamDark,borderRadius:"8px",padding:"8px 14px",cursor:"pointer",fontSize:"16px",fontWeight:700,color:CN.dark}}>→</button>
+          </div>
+
+          {/* Day pills */}
+          <div style={{display:"flex",gap:"6px",marginBottom:"14px",justifyContent:"center"}}>
+            {DAY_LABELS.map((dl,i)=>(
+              <button key={dl} onClick={()=>setActiveDayIdx(i)}
+                style={{border:"none",borderRadius:"99px",padding:"4px 10px",fontSize:"11px",fontWeight:700,cursor:"pointer",
+                  backgroundColor:i===activeDayIdx?CN.orange:dayTotals[DAYS[i]]>0?CN.creamDark:CN.white,
+                  color:i===activeDayIdx?CN.white:dayTotals[DAYS[i]]>0?CN.dark:CN.mid,
+                  border:`1px solid ${i===activeDayIdx?CN.orange:CN.border}`}}>{dl}</button>
+            ))}
+          </div>
+
+          {/* Employee cards for active day */}
+          {CATEGORIES.map(cat=>{
+            const catRoles=grouped[cat];
+            if(!catRoles.length)return null;
+            const catPlans=weekPlans.filter(p=>catRoles.find(r=>r.id===p.roleId));
+            if(!catPlans.length&&!catRoles.length)return null;
+            return (
+              <div key={cat} style={{marginBottom:"16px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"8px"}}>
+                  <Tag cat={cat} small/>
+                </div>
+                {catRoles.map(role=>{
+                  const roleRows=weekPlans.filter(p=>p.roleId===role.id);
+                  const activeDay=DAYS[activeDayIdx];
+                  return (
+                    <div key={role.id}>
+                      {roleRows.map((plan,empIdx)=>{
+                        const cost=calcRowCost(role,plan.days,tax,ot);
+                        const st=rowStatus(role,plan.days,ot);
+                        const stStyle=STATUS[st];
+                        const h=plan.days[activeDay];
+                        const hNum=parseFloat(h)||0;
+                        const overDay=ot?.dailyMax>0&&hNum>ot.dailyMax;
+                        return (
+                          <div key={plan.id} style={{backgroundColor:stStyle.rowBg,border:`1.5px solid ${overDay?CN.red:CN.border}`,borderRadius:"10px",padding:"12px 14px",marginBottom:"8px"}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"10px"}}>
+                              <div>
+                                <div style={{fontWeight:600,fontSize:"14px",color:CN.dark,display:"flex",alignItems:"center",gap:"4px"}}>
+                                  {stStyle.icon&&<span>{stStyle.icon}</span>}{role.name} <span style={{fontSize:"11px",color:CN.mid,fontWeight:400}}>#{empIdx+1}</span>
+                                </div>
+                                <div style={{fontSize:"11px",color:CN.mid}}>{role.payType==="Hourly"?`${fmt$(role.rate)}/hr`:`${fmt$(role.rate)}/mo`}</div>
+                              </div>
+                              <div style={{textAlign:"right"}}>
+                                <div style={{fontSize:"10px",color:CN.mid}}>Week total</div>
+                                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"16px",fontWeight:800,color:CN.orange}}>{cost.total>0?fmt$(cost.total):"—"}</div>
+                              </div>
+                            </div>
+                            <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                              <label style={{fontSize:"11px",fontWeight:600,color:CN.mid,textTransform:"uppercase",letterSpacing:"0.06em",whiteSpace:"nowrap"}}>Hours {DAY_LABELS[activeDayIdx]}</label>
+                              <input type="number" min={0} max={24} step={0.5}
+                                value={h} placeholder="0"
+                                onChange={e=>updateDay(plan.id,activeDay,e.target.value)}
+                                style={{flex:1,textAlign:"center",border:`1.5px solid ${overDay?CN.red:CN.border}`,
+                                  borderRadius:"8px",padding:"10px",fontSize:"18px",fontWeight:700,
+                                  fontFamily:"'DM Sans',sans-serif",backgroundColor:overDay?"#FEE2E2":CN.white,
+                                  color:overDay?CN.red:CN.dark,outline:"none",boxSizing:"border-box"}}
+                              />
+                              <button onClick={()=>removeRow(plan.id)}
+                                style={{border:`1px solid ${CN.border}`,background:CN.white,cursor:"pointer",color:CN.mid,fontSize:"13px",padding:"8px 10px",borderRadius:"8px",lineHeight:1}}>✕</button>
+                            </div>
+                            <div style={{display:"flex",gap:"12px",marginTop:"8px",flexWrap:"wrap"}}>
+                              <span style={{fontSize:"11px",color:CN.mid}}>Week: <strong style={{color:CN.dark}}>{cost.totalHrs>0?cost.totalHrs.toFixed(1)+"h":"—"}</strong></span>
+                              {cost.otHrs>0&&<span style={{fontSize:"11px",color:CN.amberDark,fontWeight:700}}>⚡ {cost.otHrs.toFixed(1)}h OT</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <button onClick={()=>addRow(role.id)}
+                        style={{border:`1px dashed ${CN.orange}`,background:"none",cursor:"pointer",
+                          color:CN.orange,fontSize:"12px",fontWeight:700,fontFamily:"'Barlow Condensed',sans-serif",
+                          textTransform:"uppercase",letterSpacing:"0.06em",padding:"8px 14px",borderRadius:"8px",
+                          width:"100%",marginBottom:"8px"}}>
+                        + Add {role.name}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
       <div style={{overflowX:"auto",borderRadius:"12px",border:`1.5px solid ${CN.border}`}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:"13px",minWidth:"860px"}}>
           <thead>
@@ -528,6 +638,7 @@ function PlanTab({roles,plans,setPlans,tax,ot}) {
           </tfoot>
         </table>
       </div>
+      )} {/* end mobile/desktop conditional */}
 
       {weekPlans.length===0&&(
         <div style={{textAlign:"center",padding:"40px",color:CN.mid,marginTop:"8px"}}>
@@ -540,6 +651,7 @@ function PlanTab({roles,plans,setPlans,tax,ot}) {
 
 // ── Summary Tab ───────────────────────────────────────────────────
 function SummaryTab({roles,plans,tax,ot}) {
+  const isMobile=useIsMobile();
   const weeks=[...new Set(plans.map(p=>p.weekOf))].sort().slice(-8);
 
   const weekData=(weekOf)=>{
@@ -587,7 +699,7 @@ function SummaryTab({roles,plans,tax,ot}) {
         <SHead title="Labor Cost Summary" sub={`Last ${weeks.length} planned weeks · All-in employer cost`}/>
         <Btn onClick={exportCSV}>Export CSV</Btn>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"12px",marginBottom:"20px"}}>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:"12px",marginBottom:"20px"}}>
         {[["Avg Weekly Total",fmt$(avg("total")),CN.orange],["Avg Total Hours",avg("totalHrs").toFixed(1)+"h",CN.dark],["Avg OT Hours",avg("otHrs")>0?avg("otHrs").toFixed(1)+"h ⚡":"0h",avg("otHrs")>0?CN.amberDark:CN.mid]].map(([l,v,c])=>(
           <Card key={l} style={{textAlign:"center",padding:"16px",marginBottom:0}}>
             <div style={{fontSize:"10px",color:CN.mid,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:"4px"}}>{l}</div>
@@ -596,7 +708,8 @@ function SummaryTab({roles,plans,tax,ot}) {
         ))}
       </div>
       <Card style={{padding:0,overflow:"hidden"}}>
-        <table style={{width:"100%",borderCollapse:"collapse",fontSize:"13px"}}>
+        <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:"13px",minWidth:isMobile?"600px":"auto"}}>
           <thead>
             <tr style={{backgroundColor:CN.creamDark,borderBottom:`1px solid ${CN.border}`}}>
               {["Week","BOH","FOH","Mgmt","Wages","Taxes","Benefits","OT Hrs","Total"].map((h,i)=>(
@@ -632,29 +745,19 @@ function SummaryTab({roles,plans,tax,ot}) {
             </tr>
           </tfoot>
         </table>
+        </div>
       </Card>
     </div>
   );
 }
 
 // ── Settings Tab ──────────────────────────────────────────────────
-function SettingsTab({tax,setTax,ot,setOt,setRoles,setPlans}) {
+function SettingsTab({tax,setTax,ot,setOt}) {
   const [t,setT]=useState({...tax});
   const [o,setO]=useState({...ot});
   const [saved,setSaved]=useState(false);
-  const [showReset,setShowReset]=useState(false);
-  const [resetInput,setResetInput]=useState("");
-  const [resetDone,setResetDone]=useState(false);
+  const isMobile=useIsMobile();
   const apply=()=>{setTax(t);setOt(o);setSaved(true);setTimeout(()=>setSaved(false),2000);};
-  const doReset=()=>{
-    if(resetInput!=="reset") return;
-    setRoles(DEFAULT_ROLES.map(r=>({...r,id:uid(),benefits:{...DEFAULT_BENEFITS,...(r.benefits||{})}})));
-    setPlans([]);
-    setTax({...DEFAULT_TAX});setT({...DEFAULT_TAX});
-    setOt({...DEFAULT_OT});setO({...DEFAULT_OT});
-    setShowReset(false);setResetInput("");
-    setResetDone(true);setTimeout(()=>setResetDone(false),3000);
-  };
 
   return (
     <div>
@@ -665,7 +768,7 @@ function SettingsTab({tax,setTax,ot,setOt,setRoles,setPlans}) {
       </Note>
       <Card>
         <Sub>Federal Taxes — Employer Portion</Sub>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0 20px"}}>
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:"0 20px"}}>
           <Field label="Social Security (%)" type="number" value={t.federalSS} step={0.01} onChange={v=>setT(p=>({...p,federalSS:v}))} note={`6.2% on first $${(t.ssWageBase||176100).toLocaleString()}/yr. IRS Pub 15.`}/>
           <Field label="Medicare (%)" type="number" value={t.federalMedicare} step={0.01} onChange={v=>setT(p=>({...p,federalMedicare:v}))} note="1.45% on all wages, no cap. IRS Pub 15."/>
           <Field label="FUTA (%)" type="number" value={t.futa} step={0.01} onChange={v=>setT(p=>({...p,futa:v}))} note="Net after WA SUTA credit = 0.6%. First $7,000/employee/yr."/>
@@ -673,7 +776,7 @@ function SettingsTab({tax,setTax,ot,setOt,setRoles,setPlans}) {
       </Card>
       <Card>
         <Sub>Washington State — Employer Portion</Sub>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 20px"}}>
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:"0 20px"}}>
           <Field label="WA SUI (%)" type="number" value={t.waSUI} step={0.01} onChange={v=>setT(p=>({...p,waSUI:v}))} note={`On first $${(t.suiWageBase||72800).toLocaleString()}/yr per employee. New employer rate ~1.2%. Your experience rate: esd.wa.gov.`}/>
           <Field label="WA L&I ($/hr worked)" type="number" value={t.waLnI} step={0.01} onChange={v=>setT(p=>({...p,waLnI:v}))} note="Per hour worked. Restaurant risk class ~6901: approx $1.50–$2.50/hr. Verify at lni.wa.gov."/>
           <Field label="WA PFML Employer (%)" type="number" value={t.waPFML} step={0.01} onChange={v=>setT(p=>({...p,waPFML:v}))} note="0% for employers under 50 employees. See paidleave.wa.gov."/>
@@ -687,56 +790,13 @@ function SettingsTab({tax,setTax,ot,setOt,setRoles,setPlans}) {
           WA follows federal FLSA: OT required after <strong>40 hrs/week at 1.5×</strong> for non-exempt hourly employees.
           WA has <strong>no daily OT</strong> requirement for adults (unlike CA). The daily max below is a <em>soft planning limit</em> — rows exceeding it show a 🚨 warning but no additional cost is calculated.
         </Note>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0 20px",maxWidth:"500px"}}>
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:"0 20px",maxWidth:isMobile?"100%":"500px"}}>
           <Field label="Weekly OT Threshold (hrs)" type="number" value={o.weeklyThreshold} step={1} min={1} onChange={v=>setO(p=>({...p,weeklyThreshold:v}))}/>
           <Field label="OT Multiplier" type="number" value={o.multiplier} step={0.1} min={1} onChange={v=>setO(p=>({...p,multiplier:v}))}/>
           <Field label="Daily Max (soft limit, hrs)" type="number" value={o.dailyMax} step={0.5} min={0} onChange={v=>setO(p=>({...p,dailyMax:v}))} note="Set 0 to disable."/>
         </div>
       </Card>
       <Btn onClick={apply}>{saved?"✓ Settings Saved":"Save Settings"}</Btn>
-
-      {/* Danger Zone */}
-      <Card style={{marginTop:32,border:`1.5px solid ${CN.red}`,backgroundColor:CN.redLight}}>
-        <h3 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:"15px",textTransform:"uppercase",letterSpacing:"0.06em",color:CN.red,margin:"0 0 8px"}}>Danger Zone</h3>
-        <p style={{fontSize:"13px",color:CN.dark,margin:"0 0 12px"}}>
-          Reset all job roles, benefits, tax/overtime settings, and weekly schedule back to factory defaults. <strong>This cannot be undone.</strong>
-        </p>
-        {!showReset && (
-          <button
-            onClick={()=>setShowReset(true)}
-            style={{fontSize:"13px",padding:"7px 14px",borderRadius:6,border:`1px solid ${CN.red}`,backgroundColor:CN.white,color:CN.red,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontWeight:600}}
-          >Reset to Defaults…</button>
-        )}
-        {showReset && (
-          <div style={{backgroundColor:CN.white,borderRadius:8,padding:"14px 16px",border:`1px solid ${CN.red}`}}>
-            <p style={{fontSize:"13px",color:CN.dark,margin:"0 0 10px"}}>
-              Type <strong>reset</strong> to confirm. All job roles, benefits, weekly plans, and tax/overtime settings will be restored to defaults.
-            </p>
-            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-              <input
-                type="text"
-                value={resetInput}
-                onChange={e=>setResetInput(e.target.value)}
-                placeholder='Type "reset" to confirm'
-                style={{flex:1,minWidth:160,fontSize:"13px",padding:"6px 10px",borderRadius:6,border:`1px solid ${CN.border}`,fontFamily:"'DM Sans',sans-serif",outline:"none"}}
-                onKeyDown={e=>{if(e.key==="Enter") doReset();}}
-              />
-              <button
-                onClick={doReset}
-                disabled={resetInput!=="reset"}
-                style={{fontSize:"13px",padding:"7px 14px",borderRadius:6,border:"none",backgroundColor:resetInput==="reset"?CN.red:"#ccc",color:CN.white,cursor:resetInput==="reset"?"pointer":"not-allowed",fontFamily:"'DM Sans',sans-serif",fontWeight:600,whiteSpace:"nowrap"}}
-              >Confirm Reset</button>
-              <button
-                onClick={()=>{setShowReset(false);setResetInput("");}}
-                style={{fontSize:"13px",padding:"7px 14px",borderRadius:6,border:`1px solid ${CN.border}`,backgroundColor:CN.white,color:CN.mid,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}
-              >Cancel</button>
-            </div>
-          </div>
-        )}
-        {resetDone && (
-          <p style={{fontSize:"13px",color:CN.red,fontWeight:600,margin:"10px 0 0"}}>✓ Database reset to defaults.</p>
-        )}
-      </Card>
     </div>
   );
 }
@@ -752,6 +812,7 @@ export default function App() {
   const [logoUrl,setLogoUrl]=useState(null);
   const [tabIcons,setTabIcons]=useState(DEFAULT_TAB_ICONS);
   const [showSystemTools,setShowSystemTools]=useState(false);
+  const isMobile=useIsMobile();
 
   useEffect(()=>{
     const link=document.createElement("link");
@@ -784,7 +845,7 @@ export default function App() {
 
   const TABS=[
     {id:"roles",label:"Job Roles",icon:tabIcons.roles},
-    {id:"plan",label:"Weekly Schedule",icon:tabIcons.plan},
+    {id:"plan",label:"Schedule",icon:tabIcons.plan},
     {id:"summary",label:"Summary",icon:tabIcons.summary},
     {id:"settings",label:"Settings",icon:"⚙️"},
   ];
@@ -797,21 +858,21 @@ export default function App() {
 
   return (
     <div style={{minHeight:"100vh",backgroundColor:CN.cream,fontFamily:"'DM Sans',sans-serif"}}>
-      <div style={{background:`linear-gradient(135deg,${CN.orange} 0%,#FF5722 100%)`,padding:"14px 24px",boxShadow:"0 2px 12px rgba(244,58,10,0.25)"}}>
-        <div style={{maxWidth:"1100px",margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"center",gap:16}}>
+      <div style={{background:`linear-gradient(135deg,${CN.orange} 0%,#FF5722 100%)`,padding:isMobile?"10px 14px":"14px 24px",boxShadow:"0 2px 12px rgba(244,58,10,0.25)"}}>
+        <div style={{maxWidth:"1100px",margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
 
           {/* Logo + Title */}
-          <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
             <div
               onClick={()=>document.getElementById("cn-logo-upload").click()}
               title="Click to upload your logo"
-              style={{width:52,height:52,borderRadius:8,border:"2px dashed rgba(255,255,255,0.5)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",overflow:"hidden",backgroundColor:"rgba(255,255,255,0.12)",flexShrink:0,transition:"background 0.15s"}}
+              style={{width:isMobile?36:52,height:isMobile?36:52,borderRadius:8,border:"2px dashed rgba(255,255,255,0.5)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",overflow:"hidden",backgroundColor:"rgba(255,255,255,0.12)",flexShrink:0,transition:"background 0.15s"}}
               onMouseEnter={e=>e.currentTarget.style.backgroundColor="rgba(255,255,255,0.22)"}
               onMouseLeave={e=>e.currentTarget.style.backgroundColor="rgba(255,255,255,0.12)"}
             >
               {logoUrl
                 ? <img src={logoUrl} alt="Logo" style={{width:"100%",height:"100%",objectFit:"contain"}}/>
-                : <span style={{fontSize:"22px",opacity:0.65}}>🏢</span>
+                : <span style={{fontSize:isMobile?"16px":"22px",opacity:0.65}}>🏢</span>
               }
             </div>
             <input id="cn-logo-upload" type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
@@ -822,18 +883,20 @@ export default function App() {
               reader.readAsDataURL(file);
               e.target.value="";
             }}/>
-            <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"22px",letterSpacing:"0.08em",textTransform:"uppercase",color:CN.white}}>Cheeky Noodles · Headcount Planner</div>
-              <div style={{fontSize:"11px",color:"rgba(255,255,255,0.75)",marginTop:"2px"}}>Standalone labor planning tool · Data persists between sessions</div>
+            <div style={{minWidth:0}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:isMobile?"16px":"22px",letterSpacing:"0.08em",textTransform:"uppercase",color:CN.white,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                {isMobile?"CN · Headcount":"Cheeky Noodles · Headcount Planner"}
+              </div>
+              {!isMobile&&<div style={{fontSize:"11px",color:"rgba(255,255,255,0.75)",marginTop:"2px"}}>Standalone labor planning tool · Data persists between sessions</div>}
             </div>
           </div>
 
           {/* Stats + System Tools */}
-          <div style={{display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
-            <div style={{textAlign:"right",fontSize:"12px",color:"rgba(255,255,255,0.8)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:isMobile?8:16,flexShrink:0}}>
+            {!isMobile&&<div style={{textAlign:"right",fontSize:"12px",color:"rgba(255,255,255,0.8)"}}>
               <div>{(roles||[]).filter(r=>r.active).length} active roles</div>
               <div>{[...new Set((plans||[]).map(p=>p.weekOf))].length} weeks planned</div>
-            </div>
+            </div>}
 
             {/* System Tools button + dropdown */}
             <div style={{position:"relative"}}>
@@ -909,21 +972,20 @@ export default function App() {
         </div>
       </div>
       <div style={{backgroundColor:CN.white,borderBottom:`1.5px solid ${CN.border}`}}>
-        <div style={{maxWidth:"1100px",margin:"0 auto",display:"flex"}}>
+        <div style={{maxWidth:"1100px",margin:"0 auto",display:"flex",overflowX:"auto"}}>
           {TABS.map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"12px 22px",fontSize:"13px",fontWeight:600,border:"none",cursor:"pointer",borderBottom:tab===t.id?`3px solid ${CN.orange}`:"3px solid transparent",color:tab===t.id?CN.orange:CN.mid,backgroundColor:"transparent",fontFamily:"'DM Sans',sans-serif"}}>
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:isMobile?"10px 14px":"12px 22px",fontSize:isMobile?"12px":"13px",fontWeight:600,border:"none",cursor:"pointer",borderBottom:tab===t.id?`3px solid ${CN.orange}`:"3px solid transparent",color:tab===t.id?CN.orange:CN.mid,backgroundColor:"transparent",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap",flexShrink:0}}>
               {t.icon} {t.label}
             </button>
           ))}
         </div>
       </div>
-      <div style={{maxWidth:"1100px",margin:"0 auto",padding:"28px 24px"}}>
+      <div style={{maxWidth:"1100px",margin:"0 auto",padding:isMobile?"16px 12px":"28px 24px"}}>
         {tab==="roles"    &&<RolesTab    roles={roles}  setRoles={setRoles}  tax={tax} ot={ot}/>}
         {tab==="plan"     &&<PlanTab     roles={roles}  plans={plans}  setPlans={setPlans} tax={tax} ot={ot}/>}
         {tab==="summary"  &&<SummaryTab  roles={roles}  plans={plans}  tax={tax} ot={ot}/>}
-        {tab==="settings" &&<SettingsTab tax={tax} setTax={setTax} ot={ot} setOt={setOt} setRoles={setRoles} setPlans={setPlans}/>}
+        {tab==="settings" &&<SettingsTab tax={tax} setTax={setTax} ot={ot} setOt={setOt}/>}
       </div>
     </div>
   );
 }
-
