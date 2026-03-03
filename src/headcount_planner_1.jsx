@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
 // ── Mobile detection ──────────────────────────────────────────────
 function useIsMobile() {
@@ -1422,7 +1422,13 @@ function AdminTab({ currentUser, allUsers, admins, onPromote, onDemote, onRefres
 export default function App({ currentUser }) {
   const [tab,setTab]=useState("plan");
   const isMobile=useIsMobile();
-  const SK = userSK(currentUser.id);
+  // Memoize SK so it's a stable object — without this, SK recreates every render
+  // which cascades to migrate → loadAll → useEffect re-fires in a loop
+  const SK = useMemo(() => userSK(currentUser.id), [currentUser.id]);
+
+  // Guard: loadAll must only fire once on mount regardless of React StrictMode
+  // double-invoke or any transient dep changes during initialisation
+  const loadDone = useRef(false);
 
   // Scenario state
   const [roleScenarios,setRoleScenarios]=useState(null);
@@ -1467,7 +1473,9 @@ export default function App({ currentUser }) {
       : [...registry, { ...currentUser, lastSeen: now }];
     await saveS(SHARED_SK.userRegistry, updated);
     return updated;
-  }, [currentUser]);
+  // Use stable primitives, not the currentUser object itself
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser.id, currentUser.name, currentUser.email, currentUser.avatar]);
 
   // Migration: v2 shared → v3 per-user keys
   const migrate = useCallback(async () => {
@@ -1542,7 +1550,12 @@ export default function App({ currentUser }) {
     if (showLoader) setLoading(false);
   }, [SK, migrate, registerUser]);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => {
+    if (!loadDone.current) {
+      loadDone.current = true;
+      loadAll();
+    }
+  }, [loadAll]);
 
   // Auto-save UI prefs
   useEffect(() => { saveS(SHARED_SK.icons, tabIcons); }, [tabIcons]);

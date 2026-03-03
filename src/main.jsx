@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo, useRef } from 'react'
 import ReactDOM from 'react-dom/client'
 import { ClerkProvider, useAuth, useUser } from '@clerk/clerk-react'
 import App from './headcount_planner_1.jsx'
@@ -24,25 +24,37 @@ function StorageInit() {
   const { isSignedIn, getToken } = useAuth()
   const { user, isLoaded } = useUser()
   const [storageReady, setStorageReady] = useState(false)
+  // initStorage must only be called once — guard against StrictMode double-fire
+  const initDone = useRef(false)
+
+  // ALL hooks must come before any conditional return (Rules of Hooks)
+  // Memoize on stable primitives so currentUser ref doesn't change between renders
+  const currentUser = useMemo(() => {
+    if (!user) return null
+    return {
+      id: user.id,
+      email: user.primaryEmailAddress?.emailAddress || '',
+      name: user.fullName || user.firstName || user.primaryEmailAddress?.emailAddress || '',
+      avatar: user.imageUrl || null,
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    user?.id,
+    user?.primaryEmailAddress?.emailAddress,
+    user?.fullName,
+    user?.firstName,
+    user?.imageUrl,
+  ])
 
   useEffect(() => {
-    if (isSignedIn && !window.__storageReady) {
-      window.__storageReady = true
+    if (isSignedIn && !initDone.current) {
+      initDone.current = true
       initStorage(getToken)
-      setStorageReady(true)
-    } else if (isSignedIn && window.__storageReady) {
       setStorageReady(true)
     }
   }, [isSignedIn, getToken])
 
-  if (!storageReady || !isLoaded || !user) return <Loading />
-
-  const currentUser = {
-    id: user.id,
-    email: user.primaryEmailAddress?.emailAddress || '',
-    name: user.fullName || user.firstName || user.primaryEmailAddress?.emailAddress || '',
-    avatar: user.imageUrl || null,
-  }
+  if (!storageReady || !isLoaded || !user || !currentUser) return <Loading />
 
   return (
     <>
