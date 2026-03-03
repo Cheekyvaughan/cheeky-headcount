@@ -1846,25 +1846,31 @@ function distributeWeighted(totalHrs, inputs) {
 // Info tooltip component
 function InfoTip({ url, source }) {
   const [show, setShow] = useState(false);
+  const ref = useRef(null);
+  const [tipStyle, setTipStyle] = useState({});
+  const handleEnter = () => {
+    if (ref.current) {
+      const r = ref.current.getBoundingClientRect();
+      setTipStyle({ position: "fixed", top: r.top - 8, left: r.left + r.width / 2,
+        transform: "translate(-50%, -100%)" });
+    }
+    setShow(true);
+  };
   return (
     <span style={{ position: "relative", display: "inline-block", marginLeft: 4 }}>
-      <span
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => setShow(false)}
+      <span ref={ref} onMouseEnter={handleEnter} onMouseLeave={() => setShow(false)}
         style={{ cursor: "pointer", fontSize: 11, color: CN.blue, fontWeight: 700,
           width: 16, height: 16, borderRadius: "50%", border: `1px solid ${CN.blue}`,
           display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
         i
       </span>
       {show && (
-        <div style={{ position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)",
-          backgroundColor: CN.dark, color: CN.white, borderRadius: 8, padding: "8px 12px",
-          fontSize: 11, whiteSpace: "nowrap", zIndex: 500, maxWidth: 280, whiteSpace: "normal",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.3)" }}>
+        <div style={{ ...tipStyle, backgroundColor: CN.dark, color: CN.white, borderRadius: 8,
+          padding: "8px 12px", fontSize: 11, zIndex: 9999, width: 260, whiteSpace: "normal",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.35)", pointerEvents: "none" }}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>Source</div>
           <div style={{ opacity: 0.85, marginBottom: 6 }}>{source}</div>
-          <a href={url} target="_blank" rel="noopener noreferrer"
-            style={{ color: "#7DD3C8", fontSize: 10, wordBreak: "break-all" }}>{url}</a>
+          <div style={{ color: "#7DD3C8", fontSize: 10, wordBreak: "break-all" }}>{url}</div>
         </div>
       )}
     </span>
@@ -2038,6 +2044,7 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
 
     } catch (e) {
       setRunError("Forecast failed: " + e.message);
+      return false;
     } finally {
       setRunning(false);
     }
@@ -2243,7 +2250,28 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
         </div>
       </div>
 
-      <StepNav />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <StepNav />
+        {(results || runError || currentStep > 1) && (
+          <button onClick={() => {
+            setCurrentStep(1);
+            setResults(null);
+            setClaudeNarrative("");
+            setClaudeDistribution(null);
+            setRunError("");
+            setGaps([]);
+            setAccepted(false);
+            setAcceptedScenarios(null);
+            setDayInputs(defaultDayInputs());
+            setDistMode("claude");
+          }} style={{
+            padding: "6px 14px", borderRadius: 99, border: `1.5px solid ${CN.border}`,
+            backgroundColor: CN.white, color: CN.mid, cursor: "pointer",
+            fontSize: 12, fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
+            whiteSpace: "nowrap", flexShrink: 0, marginLeft: 12
+          }}>↺ Reset</button>
+        )}
+      </div>
 
       {accepted && acceptedScenarios && (
         <Note type="success">
@@ -2510,11 +2538,12 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
           {runError && <Note type="alert">{runError}</Note>}
 
           <NavBar
-            nextLabel={running ? "⟳ Running…" : results ? "View Results →" : "▶ Run Forecast"}
+            nextLabel={running ? "⟳ Running…" : (results && !runError) ? "View Results →" : "▶ Run Forecast"}
             nextDisabled={running || localRoles.length === 0}
             onNext={() => {
-              if (results) { setCurrentStep(4); return; }
-              runForecast().then(() => setCurrentStep(4));
+              if (results && !runError) { setCurrentStep(4); return; }
+              setRunError("");
+              runForecast().then((ok) => { if (ok !== false) setCurrentStep(4); });
             }}
           />
         </Card>
