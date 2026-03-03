@@ -1723,6 +1723,837 @@ function AdminTab({ currentUser, allUsers, admins, onPromote, onDemote, onRefres
 }
 
 // ── App Shell ─────────────────────────────────────────────────────
+
+// ── Forecaster Tab ────────────────────────────────────────────────
+const FORECAST_BENCHMARKS = {
+  // role name keyword → { revenuePerHr, coversPerHr, floor, source, sourceUrl }
+  "line cook":    { revenuePerHr: 120, coversPerHr: 15, floor: 1, source: "NRA Industry Operations Report 2023", sourceUrl: "https://restaurant.org/research-and-media/research/economists-notebook/analysis-commentary/independent-restaurant-performance-report/" },
+  "prep":         { revenuePerHr: 200, coversPerHr: 25, floor: 1, source: "NRA Industry Operations Report 2023", sourceUrl: "https://restaurant.org/research-and-media/research/economists-notebook/analysis-commentary/independent-restaurant-performance-report/" },
+  "dishwasher":   { revenuePerHr: 250, coversPerHr: 30, floor: 1, source: "NRA Industry Operations Report 2023", sourceUrl: "https://restaurant.org/research-and-media/research/economists-notebook/analysis-commentary/independent-restaurant-performance-report/" },
+  "server":       { revenuePerHr: 80,  coversPerHr: 12, floor: 1, source: "Cornell Hospitality Quarterly — Labor Productivity in Foodservice", sourceUrl: "https://journals.sagepub.com/home/cqx" },
+  "foh":          { revenuePerHr: 80,  coversPerHr: 12, floor: 1, source: "Cornell Hospitality Quarterly — Labor Productivity in Foodservice", sourceUrl: "https://journals.sagepub.com/home/cqx" },
+  "cashier":      { revenuePerHr: 150, coversPerHr: 20, floor: 1, source: "7shifts Restaurant Labor Benchmark Report 2023", sourceUrl: "https://www.7shifts.com/blog/restaurant-labor-cost/" },
+  "counter":      { revenuePerHr: 150, coversPerHr: 20, floor: 1, source: "7shifts Restaurant Labor Benchmark Report 2023", sourceUrl: "https://www.7shifts.com/blog/restaurant-labor-cost/" },
+  "delivery":     { revenuePerHr: 180, coversPerHr: 22, floor: 0, source: "7shifts Restaurant Labor Benchmark Report 2023", sourceUrl: "https://www.7shifts.com/blog/restaurant-labor-cost/" },
+  "manager":      { revenuePerHr: null, coversPerHr: null, floor: 1, source: "Fixed floor — managerial coverage standard", sourceUrl: "https://restaurant.org/research-and-media/research/economists-notebook/analysis-commentary/independent-restaurant-performance-report/" },
+  "default":      { revenuePerHr: 150, coversPerHr: 18, floor: 1, source: "NRA Industry Operations Report 2023 (general)", sourceUrl: "https://restaurant.org/research-and-media/research/economists-notebook/analysis-commentary/independent-restaurant-performance-report/" },
+};
+
+const DAY_TYPE_MULTIPLIERS = { Slow: 0.7, Normal: 1.0, Busy: 1.3, Event: 1.5 };
+
+const BREAK_RULES = {
+  // WA state: RCW 49.12.187
+  paidRestPer4hrs: 10,   // minutes — always paid
+  mealBreakAt5hrs: 30,   // minutes — paid or unpaid (user toggles)
+};
+
+function getBenchmark(roleName) {
+  const lower = (roleName || "").toLowerCase();
+  for (const [key, val] of Object.entries(FORECAST_BENCHMARKS)) {
+    if (key !== "default" && lower.includes(key)) return { ...val };
+  }
+  return { ...FORECAST_BENCHMARKS.default };
+}
+
+function calcBreakMinutes(shiftHrs, mealPaid) {
+  // Paid 10-min rests: 1 per 4-hr block
+  const restBreaks = Math.floor(shiftHrs / 4) * BREAK_RULES.paidRestPer4hrs;
+  // Meal break at 5+ hrs: paid only if toggle is on
+  const mealBreak = shiftHrs >= 5 ? (mealPaid ? BREAK_RULES.mealBreakAt5hrs : 0) : 0;
+  return restBreaks + mealBreak;
+}
+
+function calcOperatingHrs(openTime, closeTime) {
+  if (!openTime || !closeTime) return 0;
+  const [oh, om] = openTime.split(":").map(Number);
+  const [ch, cm] = closeTime.split(":").map(Number);
+  const mins = (ch * 60 + cm) - (oh * 60 + om);
+  return Math.max(0, mins / 60);
+}
+
+function runRuleEngine(inputs, hourlyRoles, assumptions, mealBreakPaid) {
+  // inputs: { days: { mon: { open, close, dayType, revenue, covers, directHrs, closed } } }
+  // Returns: { roleId: { totalHrs, headcount, hoursPerDay: { mon: X } } }
+  const results = {};
+
+  hourlyRoles.forEach(role => {
+    const bench = assumptions[role.id] || getBenchmark(role.name);
+    let totalNeededHrs = 0;
+    const hoursPerDay = {};
+
+    DAYS.forEach(day => {
+      const d = inputs.days[day] || {};
+      if (d.closed) { hoursPerDay[day] = 0; return; }
+
+      const opHrs = calcOperatingHrs(d.open, d.close);
+      const multiplier = DAY_TYPE_MULTIPLIERS[d.dayType || "Normal"];
+
+      let hrsFromRevenue = 0, hrsFromCovers = 0, hrsFromDirect = 0, hrsFromOp = 0;
+
+      // Floor: minimum coverage = opHrs * floor indicator (1 person for full shift)
+      const floorHrs = bench.floor > 0 ? opHrs : 0;
+
+      // Volume-driven ceiling
+      if (d.revenue && bench.revenuePerHr) {
+        hrsFromRevenue = (Number(d.revenue) * multiplier) / bench.revenuePerHr;
+      }
+      if (d.covers && bench.coversPerHr) {
+        hrsFromCovers = (Number(d.covers) * multiplier) / bench.coversPerHr;
+      }
+      if (d.directHrs) {
+        hrsFromDirect = Number(d.directHrs);
+      }
+
+      // Take max of floor and all volume signals
+      const volumeHrs = Math.max(hrsFromRevenue, hrsFromCovers, hrsFromDirect);
+      const rawHrs = Math.max(floorHrs, volumeHrs);
+
+      // Add break time if paid
+      const breakMins = rawHrs > 0 ? calcBreakMinutes(rawHrs, mealBreakPaid) : 0;
+      const totalHrs = rawHrs + breakMins / 60;
+
+      hoursPerDay[day] = Math.round(totalHrs * 2) / 2; // round to 0.5
+      totalNeededHrs += hoursPerDay[day];
+    });
+
+    // Headcount: how many people needed to cover totalNeededHrs at ~defaultHours each
+    const defaultShift = role.defaultHours || 35;
+    const headcount = Math.max(bench.floor, Math.ceil(totalNeededHrs / defaultShift));
+
+    results[role.id] = { totalHrs: totalNeededHrs, headcount, hoursPerDay };
+  });
+
+  return results;
+}
+
+function distributeEvenly(totalHrs, operatingDays) {
+  if (!operatingDays.length) return {};
+  const perDay = Math.round((totalHrs / operatingDays.length) * 2) / 2;
+  return Object.fromEntries(DAYS.map(d => [d, operatingDays.includes(d) ? perDay : 0]));
+}
+
+function distributeWeighted(totalHrs, inputs) {
+  // Weekend days get 1.4× weight, Friday 1.2×, others 1.0×
+  const weights = { mon: 1.0, tue: 1.0, wed: 1.0, thu: 1.0, fri: 1.2, sat: 1.4, sun: 1.4 };
+  const operatingDays = DAYS.filter(d => !(inputs.days[d]?.closed));
+  const totalWeight = operatingDays.reduce((s, d) => s + (weights[d] || 1.0), 0);
+  return Object.fromEntries(DAYS.map(d => {
+    if (inputs.days[d]?.closed || !operatingDays.includes(d)) return [d, 0];
+    return [d, Math.round((totalHrs * (weights[d] / totalWeight)) * 2) / 2];
+  }));
+}
+
+// Info tooltip component
+function InfoTip({ url, source }) {
+  const [show, setShow] = useState(false);
+  return (
+    <span style={{ position: "relative", display: "inline-block", marginLeft: 4 }}>
+      <span
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        style={{ cursor: "pointer", fontSize: 11, color: CN.blue, fontWeight: 700,
+          width: 16, height: 16, borderRadius: "50%", border: `1px solid ${CN.blue}`,
+          display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+        i
+      </span>
+      {show && (
+        <div style={{ position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)",
+          backgroundColor: CN.dark, color: CN.white, borderRadius: 8, padding: "8px 12px",
+          fontSize: 11, whiteSpace: "nowrap", zIndex: 500, maxWidth: 280, whiteSpace: "normal",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.3)" }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Source</div>
+          <div style={{ opacity: 0.85, marginBottom: 6 }}>{source}</div>
+          <a href={url} target="_blank" rel="noopener noreferrer"
+            style={{ color: "#7DD3C8", fontSize: 10, wordBreak: "break-all" }}>{url}</a>
+        </div>
+      )}
+    </span>
+  );
+}
+
+function ForecasterTab({ roleScenarios, setRoleScenarios, planScenarios, setPlanScenarios,
+                         taxYears, ot, isMobile, onAccepted }) {
+
+  const currentYear = new Date().getFullYear();
+  const tax = taxYears?.[currentYear] || DEFAULT_TAX;
+
+  // All active hourly roles from active role scenario
+  const activeRS = roleScenarios?.scenarios?.find(s => s.id === roleScenarios.activeId);
+  const [localRoles, setLocalRoles] = useState(() =>
+    (activeRS?.roles || []).filter(r => r.active && r.payType === "Hourly")
+  );
+
+  // Week
+  const [weekOf, setWeekOf] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return isoMonday(d);
+  });
+
+  // Day inputs
+  const defaultDayInputs = () => DAYS.reduce((a, d) => ({
+    ...a,
+    [d]: { open: "11:00", close: "21:00", dayType: "Normal", revenue: "", covers: "", directHrs: "", closed: d === "mon" }
+  }), {});
+  const [dayInputs, setDayInputs] = useState(defaultDayInputs);
+  const setDay = (day, field, val) => setDayInputs(p => ({ ...p, [day]: { ...p[day], [field]: val } }));
+
+  // Input mode
+  const [inputMode, setInputMode] = useState("revenue"); // revenue | covers | direct | oponly
+
+  // Break toggle
+  const [mealBreakPaid, setMealBreakPaid] = useState(true);
+
+  // Per-role assumptions (editable)
+  const [assumptions, setAssumptions] = useState(() =>
+    Object.fromEntries(localRoles.map(r => [r.id, getBenchmark(r.name)]))
+  );
+  const setAssumption = (roleId, field, val) =>
+    setAssumptions(p => ({ ...p, [roleId]: { ...p[roleId], [field]: isNaN(Number(val)) ? val : Number(val) } }));
+
+  // Results
+  const [results, setResults] = useState(null);
+  const [claudeNarrative, setClaudeNarrative] = useState("");
+  const [claudeDistribution, setClaudeDistribution] = useState(null); // { roleId: hoursPerDay }
+  const [running, setRunning] = useState(false);
+  const [runError, setRunError] = useState("");
+
+  // Display mode for distribution
+  const [distMode, setDistMode] = useState("claude"); // claude | even | weighted
+
+  // Output format
+  const [outputFormat, setOutputFormat] = useState("skeleton"); // headcount | hours | skeleton
+
+  // Gap detection — roles suggested by name not in localRoles
+  const [gaps, setGaps] = useState([]); // [{ suggestedName, category }]
+  const [newRoleForms, setNewRoleForms] = useState({}); // gapName → partial role data
+
+  // Inline role addition
+  const [addingGap, setAddingGap] = useState(null);
+  const [gapForm, setGapForm] = useState({ name: "", category: "BOH", rate: "", defaultHours: 35, otEligible: true, isMinor: false });
+
+  // Accept state
+  const [accepted, setAccepted] = useState(false);
+  const [acceptedScenarios, setAcceptedScenarios] = useState(null);
+
+  // Sync localRoles when roleScenarios changes
+  useEffect(() => {
+    const rs = roleScenarios?.scenarios?.find(s => s.id === roleScenarios.activeId);
+    const hourly = (rs?.roles || []).filter(r => r.active && r.payType === "Hourly");
+    setLocalRoles(hourly);
+    setAssumptions(Object.fromEntries(hourly.map(r => [r.id, getBenchmark(r.name)])));
+  }, [roleScenarios]);
+
+  const operatingDays = DAYS.filter(d => !dayInputs[d]?.closed);
+
+  // ── Run forecast ──────────────────────────────────────────────────
+  async function runForecast() {
+    setRunning(true); setRunError(""); setClaudeNarrative(""); setClaudeDistribution(null); setResults(null); setGaps([]);
+    try {
+      const ruleResults = runRuleEngine(
+        { days: dayInputs },
+        localRoles,
+        assumptions,
+        mealBreakPaid
+      );
+      setResults(ruleResults);
+
+      // Build Claude prompt
+      const weekSummary = DAYS.map(d => {
+        const di = dayInputs[d];
+        if (di.closed) return `${DAY_LABELS[DAYS.indexOf(d)]}: Closed`;
+        const opHrs = calcOperatingHrs(di.open, di.close).toFixed(1);
+        const parts = [`${di.open}–${di.close} (${opHrs}h)`, `${di.dayType}`];
+        if (di.revenue) parts.push(`$${di.revenue} rev`);
+        if (di.covers) parts.push(`${di.covers} covers`);
+        return `${DAY_LABELS[DAYS.indexOf(d)]}: ${parts.join(", ")}`;
+      }).join("\n");
+
+      const roleSummary = localRoles.map(r => {
+        const b = assumptions[r.id];
+        const res = ruleResults[r.id];
+        return `- ${r.name} (${r.category}): ${res?.totalHrs.toFixed(1)}h needed, ${res?.headcount} people, rate $${r.rate}/hr. Benchmarks: $${b.revenuePerHr}/rev-hr, ${b.coversPerHr} covers/hr, floor ${b.floor}.`;
+      }).join("\n");
+
+      const prompt = `You are a restaurant operations analyst. Analyze this staffing plan for Cheeky Noodles and provide:
+1. A brief narrative (3–5 sentences) explaining the staffing recommendation and any notable observations.
+2. A JSON block (fenced with \`\`\`json) with day-by-day hour distribution per role ID. Keys are role IDs, values are objects with day keys (mon/tue/wed/thu/fri/sat/sun) and hour values (number, rounded to 0.5).
+
+Week: ${fmtWeek(weekOf)}
+Operating schedule:
+${weekSummary}
+
+Hourly roles and rule-engine output:
+${roleSummary}
+
+Meal breaks: ${mealBreakPaid ? "paid (included in hours)" : "unpaid (not in hours)"}
+Input mode: ${inputMode}
+
+Distribute hours thoughtfully across operating days, weighting heavier days appropriately. Keep total hours per role close to the rule-engine totals. Return ONLY the narrative then the JSON block.`;
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+
+      const data = await response.json();
+      const text = data.content?.map(b => b.text || "").join("") || "";
+
+      // Extract JSON block
+      const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
+      let dist = null;
+      if (jsonMatch) {
+        try { dist = JSON.parse(jsonMatch[1]); } catch {}
+      }
+
+      // Narrative = everything before the json block
+      const narrative = text.replace(/```json[\s\S]*?```/, "").trim();
+      setClaudeNarrative(narrative);
+      if (dist) setClaudeDistribution(dist);
+
+      // Gap detection — Claude may mention roles in narrative; also check if rule results suggest
+      // more headcount than localRoles can provide
+      const detectedGaps = [];
+      localRoles.forEach(r => {
+        const res = ruleResults[r.id];
+        if (res && res.headcount > localRoles.filter(x => x.name === r.name).length * 3) {
+          // Heuristic: if headcount > 3× occurrences, suggest adding a variant
+        }
+      });
+      setGaps(detectedGaps);
+
+    } catch (e) {
+      setRunError("Forecast failed: " + e.message);
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  // ── Distribution helpers ──────────────────────────────────────────
+  function getDistribution(roleId) {
+    if (distMode === "claude" && claudeDistribution?.[roleId]) return claudeDistribution[roleId];
+    const totalHrs = results?.[roleId]?.totalHrs || 0;
+    if (distMode === "even") return distributeEvenly(totalHrs, operatingDays);
+    return distributeWeighted(totalHrs, { days: dayInputs });
+  }
+
+  // ── Cost calculation for results ─────────────────────────────────
+  function calcForecastCost(roleId) {
+    const role = localRoles.find(r => r.id === roleId);
+    if (!role || !results?.[roleId]) return null;
+    const dist = getDistribution(roleId);
+    return calcRowCost(role, dist, tax, ot);
+  }
+
+  const totalCost = results
+    ? localRoles.reduce((s, r) => { const c = calcForecastCost(r.id); return s + (c?.total || 0); }, 0)
+    : 0;
+
+  // ── Add gap role inline ───────────────────────────────────────────
+  function commitGapRole() {
+    if (!gapForm.name || !gapForm.rate) return;
+    const newRole = {
+      id: uid(), name: gapForm.name, category: gapForm.category,
+      payType: "Hourly", rate: Number(gapForm.rate), defaultHours: Number(gapForm.defaultHours) || 35,
+      otEligible: gapForm.otEligible, exempt: false, isMinor: gapForm.isMinor,
+      benefits: { ...DEFAULT_BENEFITS }, active: true
+    };
+    // Add to active role scenario
+    setRoleScenarios(prev => ({
+      ...prev,
+      scenarios: prev.scenarios.map(s =>
+        s.id === prev.activeId ? { ...s, roles: [...s.roles, newRole] } : s
+      )
+    }));
+    setLocalRoles(p => [...p, newRole]);
+    setAssumptions(p => ({ ...p, [newRole.id]: getBenchmark(newRole.name) }));
+    setGaps(p => p.filter(g => g !== addingGap));
+    setAddingGap(null);
+    setGapForm({ name: "", category: "BOH", rate: "", defaultHours: 35, otEligible: true, isMinor: false });
+  }
+
+  // ── Accept forecast → create scenarios ───────────────────────────
+  function acceptForecast() {
+    if (!results) return;
+    const label = `Forecast — ${fmtWeek(weekOf)}`;
+
+    // Build role scenario from localRoles (includes any gap roles added)
+    const newRS = makeRoleScenario(label, localRoles);
+    const updatedRS = {
+      ...roleScenarios,
+      scenarios: [...roleScenarios.scenarios, newRS]
+    };
+
+    // Build plan scenario with forecast hours
+    const newPS = makePlanScenario(label, newRS.id);
+    const plans = [];
+    localRoles.forEach(role => {
+      const dist = getDistribution(role.id);
+      const headcount = results[role.id]?.headcount || 1;
+      // Create one plan row per person (headcount), distribute hours across them
+      for (let i = 0; i < headcount; i++) {
+        const days = {};
+        DAYS.forEach(d => {
+          const dayTotal = dist[d] || 0;
+          // Split hours evenly across headcount rows
+          days[d] = Math.round((dayTotal / headcount) * 2) / 2;
+        });
+        plans.push({ id: uid(), weekOf, roleId: role.id, days });
+      }
+    });
+    newPS.plans = plans;
+
+    const updatedPS = {
+      ...planScenarios,
+      scenarios: [...planScenarios.scenarios, newPS],
+      activeId: newPS.id
+    };
+
+    setRoleScenarios(updatedRS);
+    setPlanScenarios(updatedPS);
+    setAccepted(true);
+    setAcceptedScenarios({ roleName: newRS.name, planName: newPS.name });
+    if (onAccepted) onAccepted();
+  }
+
+  // ── Render ────────────────────────────────────────────────────────
+  const stepStyle = { marginBottom: 24 };
+  const sectionLabel = { fontSize: 11, fontWeight: 700, textTransform: "uppercase",
+    letterSpacing: "0.07em", color: CN.mid, marginBottom: 8, display: "block" };
+  const inputStyle = { border: `1.5px solid ${CN.border}`, borderRadius: 8, padding: "7px 10px",
+    fontSize: 13, fontFamily: "'DM Sans',sans-serif", color: CN.dark, backgroundColor: CN.white,
+    outline: "none", width: "100%", boxSizing: "border-box" };
+  const pillBtn = (active, onClick, label) => (
+    <button onClick={onClick} style={{
+      padding: "5px 13px", borderRadius: 99, border: `1.5px solid ${active ? CN.orange : CN.border}`,
+      backgroundColor: active ? CN.orangeLight : CN.white, color: active ? CN.orange : CN.mid,
+      fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: active ? 700 : 400, cursor: "pointer"
+    }}>{label}</button>
+  );
+
+  return (
+    <div style={{ maxWidth: 960, margin: "0 auto", padding: isMobile ? "16px 12px" : "28px 24px" }}>
+
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 800, fontSize: isMobile ? 20 : 26,
+          textTransform: "uppercase", color: CN.dark, letterSpacing: "0.06em" }}>
+          🔮 Headcount Forecaster
+        </div>
+        <div style={{ fontSize: 13, color: CN.mid, marginTop: 4 }}>
+          Build a staffing plan from your operating schedule. Rule-based engine + Claude analysis.
+        </div>
+      </div>
+
+      {accepted && acceptedScenarios && (
+        <Note type="success">
+          ✅ Forecast accepted. Created role scenario <strong>"{acceptedScenarios.roleName}"</strong> and
+          schedule scenario <strong>"{acceptedScenarios.planName}"</strong>. Switch to the Schedule tab to review and edit.
+        </Note>
+      )}
+
+      {/* ── Step 1: Week + breaks ── */}
+      <Card style={stepStyle}>
+        <Sub>Step 1 — Week Setup</Sub>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 16 }}>
+          <div style={{ flex: "1 1 180px" }}>
+            <span style={sectionLabel}>Week of</span>
+            <input type="date" value={weekOf}
+              onChange={e => setWeekOf(e.target.value)}
+              style={{ ...inputStyle, width: "auto" }} />
+          </div>
+          <div style={{ flex: "1 1 220px" }}>
+            <span style={sectionLabel}>Meal break treatment</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              {pillBtn(mealBreakPaid, () => setMealBreakPaid(true), "Paid (include in hours)")}
+              {pillBtn(!mealBreakPaid, () => setMealBreakPaid(false), "Unpaid (exclude)")}
+            </div>
+            <div style={{ fontSize: 11, color: CN.mid, marginTop: 4 }}>
+              10-min paid rests (per 4h) always included · WA RCW 49.12.187
+            </div>
+          </div>
+        </div>
+
+        {/* Day grid */}
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 560 }}>
+            <thead>
+              <tr style={{ backgroundColor: CN.creamDark }}>
+                <th style={{ padding: "7px 10px", textAlign: "left", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Day</th>
+                <th style={{ padding: "7px 10px", textAlign: "center", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Closed</th>
+                <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Open</th>
+                <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Close</th>
+                <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Day Type</th>
+                <th style={{ padding: "7px 6px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Op Hrs</th>
+              </tr>
+            </thead>
+            <tbody>
+              {DAYS.map((d, i) => {
+                const di = dayInputs[d];
+                const opHrs = di.closed ? 0 : calcOperatingHrs(di.open, di.close);
+                return (
+                  <tr key={d} style={{ backgroundColor: i % 2 === 0 ? CN.white : CN.cream, opacity: di.closed ? 0.45 : 1 }}>
+                    <td style={{ padding: "7px 10px", fontWeight: 600, color: CN.dark }}>{DAY_LABELS[i]}</td>
+                    <td style={{ padding: "7px 10px", textAlign: "center" }}>
+                      <input type="checkbox" checked={!!di.closed} onChange={e => setDay(d, "closed", e.target.checked)}
+                        style={{ accentColor: CN.orange, width: 15, height: 15 }} />
+                    </td>
+                    <td style={{ padding: "4px 8px" }}>
+                      <input type="time" value={di.open} disabled={di.closed}
+                        onChange={e => setDay(d, "open", e.target.value)}
+                        style={{ ...inputStyle, width: 100, opacity: di.closed ? 0.4 : 1 }} />
+                    </td>
+                    <td style={{ padding: "4px 8px" }}>
+                      <input type="time" value={di.close} disabled={di.closed}
+                        onChange={e => setDay(d, "close", e.target.value)}
+                        style={{ ...inputStyle, width: 100, opacity: di.closed ? 0.4 : 1 }} />
+                    </td>
+                    <td style={{ padding: "4px 8px" }}>
+                      <select value={di.dayType} disabled={di.closed}
+                        onChange={e => setDay(d, "dayType", e.target.value)}
+                        style={{ ...inputStyle, width: 100, opacity: di.closed ? 0.4 : 1 }}>
+                        {Object.keys(DAY_TYPE_MULTIPLIERS).map(t => (
+                          <option key={t} value={t}>{t} ({DAY_TYPE_MULTIPLIERS[t]}×)</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td style={{ padding: "7px 6px", fontWeight: 700, color: opHrs > 0 ? CN.dark : CN.mid, fontSize: 13 }}>
+                      {opHrs > 0 ? opHrs.toFixed(1) + "h" : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* ── Step 2: Input mode + volume data ── */}
+      <Card style={stepStyle}>
+        <Sub>Step 2 — Volume Inputs</Sub>
+        <div style={{ marginBottom: 12 }}>
+          <span style={sectionLabel}>Forecasting basis</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {[
+              ["revenue", "💰 Revenue target"],
+              ["covers",  "👥 Cover / transaction count"],
+              ["direct",  "⏱ Direct labor hours"],
+              ["oponly",  "🕐 Operating hours only (floor)"],
+            ].map(([mode, label]) => pillBtn(inputMode === mode, () => setInputMode(mode), label))}
+          </div>
+          {inputMode === "oponly" && (
+            <div style={{ fontSize: 12, color: CN.mid, marginTop: 8 }}>
+              Floor-only mode: staffing is based purely on hours of operation and role minimum coverage. No volume signals used.
+            </div>
+          )}
+        </div>
+
+        {inputMode !== "oponly" && (
+          <div style={{ overflowX: "auto", marginTop: 8 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 480 }}>
+              <thead>
+                <tr style={{ backgroundColor: CN.creamDark }}>
+                  <th style={{ padding: "7px 10px", textAlign: "left", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Day</th>
+                  {inputMode === "revenue" && <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Revenue ($)</th>}
+                  {inputMode === "covers"  && <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Covers</th>}
+                  {inputMode === "direct"  && <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Labor Hours</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {DAYS.map((d, i) => {
+                  const di = dayInputs[d];
+                  if (di.closed) return null;
+                  return (
+                    <tr key={d} style={{ backgroundColor: i % 2 === 0 ? CN.white : CN.cream }}>
+                      <td style={{ padding: "6px 10px", fontWeight: 600, color: CN.dark }}>{DAY_LABELS[i]}</td>
+                      <td style={{ padding: "4px 8px" }}>
+                        {inputMode === "revenue" && (
+                          <input type="number" min={0} value={di.revenue} placeholder="e.g. 2500"
+                            onChange={e => setDay(d, "revenue", e.target.value)}
+                            style={{ ...inputStyle, width: 130 }} />
+                        )}
+                        {inputMode === "covers" && (
+                          <input type="number" min={0} value={di.covers} placeholder="e.g. 80"
+                            onChange={e => setDay(d, "covers", e.target.value)}
+                            style={{ ...inputStyle, width: 130 }} />
+                        )}
+                        {inputMode === "direct" && (
+                          <input type="number" min={0} step={0.5} value={di.directHrs} placeholder="e.g. 40"
+                            onChange={e => setDay(d, "directHrs", e.target.value)}
+                            style={{ ...inputStyle, width: 130 }} />
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* ── Step 3: Assumptions per role ── */}
+      <Card style={stepStyle}>
+        <Sub>Step 3 — Productivity Assumptions</Sub>
+        <Note type="info">
+          These are planning benchmarks — not actuals. Edit to match your operation before running. Sources linked via (i).
+        </Note>
+        {localRoles.length === 0 && (
+          <Note type="warning">No active hourly roles found. Add roles in the Job Roles tab first.</Note>
+        )}
+        {localRoles.length > 0 && (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 580 }}>
+              <thead>
+                <tr style={{ backgroundColor: CN.creamDark }}>
+                  <th style={{ padding: "7px 10px", textAlign: "left", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Role</th>
+                  <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>
+                    Rev/hr ($) <InfoTip source={getBenchmark("default").source} url={getBenchmark("default").sourceUrl} />
+                  </th>
+                  <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>
+                    Covers/hr <InfoTip source="Cornell Hospitality Quarterly — Labor Productivity in Foodservice" url="https://journals.sagepub.com/home/cqx" />
+                  </th>
+                  <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>
+                    Floor <InfoTip source="Minimum viable coverage — 1 person must be present for the role whenever open" url="https://restaurant.org/research-and-media/research/economists-notebook/analysis-commentary/independent-restaurant-performance-report/" />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {localRoles.map((r, i) => {
+                  const a = assumptions[r.id] || getBenchmark(r.name);
+                  const bench = getBenchmark(r.name);
+                  return (
+                    <tr key={r.id} style={{ backgroundColor: i % 2 === 0 ? CN.white : CN.cream }}>
+                      <td style={{ padding: "7px 10px" }}>
+                        <div style={{ fontWeight: 600, color: CN.dark }}>{r.name}</div>
+                        <div style={{ fontSize: 10, color: CN.mid }}>{r.category} · ${r.rate}/hr</div>
+                      </td>
+                      <td style={{ padding: "4px 8px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <input type="number" min={0} value={a.revenuePerHr ?? ""} placeholder="n/a"
+                            onChange={e => setAssumption(r.id, "revenuePerHr", e.target.value === "" ? null : e.target.value)}
+                            style={{ ...inputStyle, width: 80 }} />
+                          <InfoTip source={bench.source} url={bench.sourceUrl} />
+                        </div>
+                      </td>
+                      <td style={{ padding: "4px 8px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <input type="number" min={0} value={a.coversPerHr ?? ""} placeholder="n/a"
+                            onChange={e => setAssumption(r.id, "coversPerHr", e.target.value === "" ? null : e.target.value)}
+                            style={{ ...inputStyle, width: 80 }} />
+                          <InfoTip source={bench.source} url={bench.sourceUrl} />
+                        </div>
+                      </td>
+                      <td style={{ padding: "4px 8px" }}>
+                        <input type="number" min={0} max={5} value={a.floor}
+                          onChange={e => setAssumption(r.id, "floor", e.target.value)}
+                          style={{ ...inputStyle, width: 60 }} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Gap role addition */}
+        {gaps.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: CN.amberDark, marginBottom: 8 }}>⚠ Suggested roles not yet configured:</div>
+            {gaps.map(gap => (
+              <div key={gap} style={{ marginBottom: 8 }}>
+                {addingGap === gap ? (
+                  <div style={{ backgroundColor: CN.creamDark, borderRadius: 10, padding: 14 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>Add role: {gap}</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+                      <input placeholder="Role name" value={gapForm.name}
+                        onChange={e => setGapForm(p => ({ ...p, name: e.target.value }))}
+                        style={{ ...inputStyle, width: 160 }} />
+                      <select value={gapForm.category}
+                        onChange={e => setGapForm(p => ({ ...p, category: e.target.value }))}
+                        style={{ ...inputStyle, width: 120 }}>
+                        {["BOH","FOH","Management","Other"].map(c => <option key={c}>{c}</option>)}
+                      </select>
+                      <input type="number" placeholder="$/hr" value={gapForm.rate}
+                        onChange={e => setGapForm(p => ({ ...p, rate: e.target.value }))}
+                        style={{ ...inputStyle, width: 90 }} />
+                      <input type="number" placeholder="Default hrs/wk" value={gapForm.defaultHours}
+                        onChange={e => setGapForm(p => ({ ...p, defaultHours: e.target.value }))}
+                        style={{ ...inputStyle, width: 130 }} />
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <Btn onClick={commitGapRole} style={{ opacity: gapForm.name && gapForm.rate ? 1 : 0.4 }}>Add Role</Btn>
+                      <Btn variant="ghost" onClick={() => setAddingGap(null)}>Cancel</Btn>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px",
+                    backgroundColor: CN.amberLight, borderRadius: 8, border: `1px solid ${CN.amber}` }}>
+                    <span style={{ fontSize: 12, color: CN.amberDark, flex: 1 }}>Missing role: <strong>{gap}</strong></span>
+                    <Btn variant="ghost" onClick={() => { setAddingGap(gap); setGapForm(p => ({ ...p, name: gap })); }}>
+                      Add Inline
+                    </Btn>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ marginTop: 16 }}>
+          <button onClick={runForecast} disabled={running || localRoles.length === 0}
+            style={{ padding: "10px 24px", backgroundColor: running ? CN.mid : CN.orange, color: CN.white,
+              border: "none", borderRadius: 10, cursor: running ? "not-allowed" : "pointer",
+              fontSize: 14, fontWeight: 700, fontFamily: "'Barlow Condensed',sans-serif",
+              textTransform: "uppercase", letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 8 }}>
+            {running ? "⟳ Running…" : "▶ Run Forecast"}
+          </button>
+          {runError && <div style={{ color: CN.red, fontSize: 12, marginTop: 8 }}>{runError}</div>}
+        </div>
+      </Card>
+
+      {/* ── Results ── */}
+      {results && (
+        <>
+          {/* Claude narrative */}
+          {claudeNarrative && (
+            <Card style={stepStyle}>
+              <Sub>Claude Analysis</Sub>
+              <div style={{ fontSize: 13, color: CN.dark, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
+                {claudeNarrative}
+              </div>
+            </Card>
+          )}
+
+          {/* Distribution toggle */}
+          <Card style={stepStyle}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+              <Sub style={{ margin: 0 }}>Step 4 — Forecast Results</Sub>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11, color: CN.mid, alignSelf: "center" }}>Distribution:</span>
+                {(claudeDistribution ? [["claude","🤖 Claude"],["even","⚖ Even"],["weighted","📅 Day-weighted"]] : [["even","⚖ Even"],["weighted","📅 Day-weighted"]]).map(([m,l]) =>
+                  pillBtn(distMode === m, () => setDistMode(m), l)
+                )}
+              </div>
+            </div>
+
+            {localRoles.map((role, ri) => {
+              const res = results[role.id];
+              if (!res) return null;
+              const dist = getDistribution(role.id);
+              const cost = calcForecastCost(role.id);
+              return (
+                <div key={role.id} style={{ marginBottom: 16, border: `1.5px solid ${CN.border}`,
+                  borderRadius: 10, overflow: "hidden" }}>
+                  {/* Role header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "10px 14px", backgroundColor: CN.creamDark, flexWrap: "wrap", gap: 8 }}>
+                    <div>
+                      <span style={{ fontWeight: 700, fontSize: 14, color: CN.dark }}>{role.name}</span>
+                      <span style={{ fontSize: 11, color: CN.mid, marginLeft: 8 }}>{role.category} · ${role.rate}/hr</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 16 }}>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 10, color: CN.mid }}>People needed</div>
+                        <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 18, fontWeight: 800, color: CN.orange }}>
+                          {res.headcount}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 10, color: CN.mid }}>Total hrs</div>
+                        <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 18, fontWeight: 800, color: CN.dark }}>
+                          {res.totalHrs.toFixed(1)}h
+                        </div>
+                      </div>
+                      {cost && (
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontSize: 10, color: CN.mid }}>Week cost</div>
+                          <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 18, fontWeight: 800, color: CN.blue }}>
+                            {fmt$(cost.total)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {/* Day breakdown */}
+                  <div style={{ display: "flex", borderTop: `1px solid ${CN.border}` }}>
+                    {DAYS.map((d, i) => {
+                      const hrs = dist[d] || 0;
+                      const closed = dayInputs[d]?.closed;
+                      return (
+                        <div key={d} style={{ flex: 1, padding: "8px 4px", textAlign: "center",
+                          backgroundColor: closed ? CN.creamDark : hrs > 0 ? CN.white : CN.cream,
+                          borderRight: i < 6 ? `1px solid ${CN.border}` : "none" }}>
+                          <div style={{ fontSize: 10, color: CN.mid, fontWeight: 600 }}>{DAY_LABELS[i]}</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: closed ? CN.border : hrs > 0 ? CN.dark : CN.mid, marginTop: 2 }}>
+                            {closed ? "—" : hrs > 0 ? hrs + "h" : "0h"}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Cost breakdown */}
+                  {cost && (
+                    <div style={{ display: "flex", gap: 16, padding: "8px 14px", backgroundColor: CN.cream,
+                      fontSize: 11, color: CN.mid, flexWrap: "wrap" }}>
+                      <span>Wages: <strong>{fmt$(cost.wages)}</strong></span>
+                      <span>Taxes: <strong>{fmt$(cost.taxes)}</strong></span>
+                      <span>Benefits: <strong>{fmt$(cost.benefits)}</strong></span>
+                      {cost.otHrs > 0 && <span style={{ color: CN.amberDark }}>OT: {cost.otHrs.toFixed(1)}h</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Total cost */}
+            <div style={{ display: "flex", justifyContent: "flex-end", padding: "12px 14px",
+              backgroundColor: CN.dark, borderRadius: 10, marginTop: 8 }}>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>Total forecast labor cost</div>
+                <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 24, fontWeight: 800, color: CN.white }}>
+                  {fmt$(totalCost)}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* ── Step 5: Accept ── */}
+          <Card>
+            <Sub>Step 5 — Accept Forecast</Sub>
+            <div style={{ marginBottom: 14 }}>
+              <span style={sectionLabel}>Output format</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {pillBtn(outputFormat === "headcount", () => setOutputFormat("headcount"), "👤 Headcount summary")}
+                {pillBtn(outputFormat === "hours",     () => setOutputFormat("hours"),     "⏱ Hours per role")}
+                {pillBtn(outputFormat === "skeleton",  () => setOutputFormat("skeleton"),  "📅 Weekly skeleton")}
+              </div>
+              <div style={{ fontSize: 11, color: CN.mid, marginTop: 6 }}>
+                {outputFormat === "headcount" && "Creates a role scenario with the suggested number of people. No hours pre-filled."}
+                {outputFormat === "hours"     && "Creates a plan scenario with total weekly hours per role, distributed evenly."}
+                {outputFormat === "skeleton"  && "Creates a full day-by-day schedule using the " + distMode + " distribution."}
+              </div>
+            </div>
+
+            <Note type="info">
+              This will create a new Role Scenario and Schedule Scenario labelled "Forecast — {fmtWeek(weekOf)}". You can rename them after.
+            </Note>
+
+            <Btn onClick={acceptForecast} style={{ marginTop: 4 }}>
+              ✓ Accept &amp; Create Scenarios
+            </Btn>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function App({ currentUser }) {
   const [tab,setTab]=useState("plan");
   const isMobile=useIsMobile();
@@ -1942,10 +2773,11 @@ export default function App({ currentUser }) {
   const settingsDirty = !!savedTaxYears && (JSON.stringify(taxYears) !== JSON.stringify(savedTaxYears) || JSON.stringify(ot) !== JSON.stringify(savedOt));
 
   const TABS = [
-    { id: "roles",    label: "Job Roles",    icon: tabIcons.roles,   dirty: rolesDirty },
-    { id: "plan",     label: "Schedule",     icon: tabIcons.plan,    dirty: plansDirty },
-    { id: "summary",  label: "Summary",      icon: tabIcons.summary, dirty: false },
-    { id: "settings", label: "Taxes & Regs", icon: "⚖️",             dirty: settingsDirty },
+    { id: "roles",      label: "Job Roles",    icon: tabIcons.roles,   dirty: rolesDirty },
+    { id: "plan",       label: "Schedule",     icon: tabIcons.plan,    dirty: plansDirty },
+    { id: "forecast",   label: "Forecaster",   icon: "🔮",             dirty: false },
+    { id: "summary",    label: "Summary",      icon: tabIcons.summary, dirty: false },
+    { id: "settings",   label: "Taxes & Regs", icon: "⚖️",             dirty: settingsDirty },
     ...(effectiveAdmin ? [{ id: "admin", label: "Admin", icon: "🔐", dirty: false }] : []),
   ];
 
@@ -2085,6 +2917,12 @@ export default function App({ currentUser }) {
           selectedYear={selectedTaxYear} setSelectedYear={setSelectedTaxYear}
           ot={ot} setOt={setOt}
           dirty={settingsDirty} onSave={saveSettings} onClear={clearSettings} saving={saving.settings} isMobile={isMobile}
+        />}
+        {tab==="forecast"&&roleScenarios&&planScenarios&&<ForecasterTab
+          roleScenarios={roleScenarios} setRoleScenarios={setRoleScenarios}
+          planScenarios={planScenarios} setPlanScenarios={setPlanScenarios}
+          taxYears={taxYears} ot={ot} isMobile={isMobile}
+          onAccepted={()=>{ saveRoles(); savePlans(); }}
         />}
         {tab==="admin"&&effectiveAdmin&&<AdminTab
           currentUser={currentUser}
