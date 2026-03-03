@@ -31,14 +31,20 @@ const CN = {
 };
 
 // ── Defaults ──────────────────────────────────────────────────────
-const DEFAULT_TAX = {
-  federalSS: 6.2, federalMedicare: 1.45, futa: 0.6,
-  waSUI: 1.2, waLnI: 1.85, waPFML: 0,
-  ssWageBase: 176100, suiWageBase: 72800,
-  minWage: 16.66, effectiveDate: "Jan 1, 2025",
-  finalized: false,
-};
-const DEFAULT_OT = { weeklyThreshold: 40, dailyMax: 10, multiplier: 1.5 };
+// Per-year tax template — clone and adjust when adding a new year
+function defaultTaxForYear(year) {
+  return {
+    federalSS: 6.2, federalMedicare: 1.45, futa: 0.6,
+    waSUI: 1.2, waLnI: 1.85, waPFML: 0,
+    ssWageBase: 176100, suiWageBase: 72800,
+    minWage: 16.66, nonExemptWeeklyMin: 1332.80,
+    effectiveDate: `Jan 1, ${year}`,
+    finalized: false,
+  };
+}
+// Backward-compat single-year object (used in migration)
+const DEFAULT_TAX = defaultTaxForYear(new Date().getFullYear());
+const DEFAULT_OT = { weeklyThreshold: 40, dailyMax: 10, multiplier: 1.5, nonExemptWeeklyMin: 1332.80 };
 const DEFAULT_TAB_ICONS = { roles: "👥", plan: "📋", summary: "📊" };
 const DEFAULT_BENEFITS = { healthMonthly: 0, dentalMonthly: 0, visionMonthly: 0, retirement401k: 0, otherMonthly: 0 };
 
@@ -63,7 +69,8 @@ function userSK(userId) {
 }
 // Shared keys (all users)
 const SHARED_SK = {
-  tax: "cn-hc-tax-v3",
+  taxYears: "cn-hc-tax-years-v1",  // per-year tax map { [year]: taxObject }
+  tax: "cn-hc-tax-v3",             // kept for one-time migration only
   ot: "cn-hc-ot-v4",
   logo: "cn-hc-logo-v1",
   icons: "cn-hc-tab-icons-v1",
@@ -96,11 +103,11 @@ const DEFAULT_ROLES = [
   {id:uid(),name:"Manager",          category:"Management", payType:"Salary",rate:4500,defaultHours:45,otEligible:false,exempt:true, benefits:{...DEFAULT_BENEFITS,healthMonthly:300},active:true},
 ];
 
-function makeRoleScenario(name, roles) {
-  return { id: uid(), name, roles: deepClone(roles) };
+function makeRoleScenario(name, roles, isDefault = false) {
+  return { id: uid(), name, roles: deepClone(roles), isDefault };
 }
-function makePlanScenario(name, roleScenarioId) {
-  return { id: uid(), name, roleScenarioId, plans: [] };
+function makePlanScenario(name, roleScenarioId, isDefault = false) {
+  return { id: uid(), name, roleScenarioId, plans: [], isDefault };
 }
 
 // ── Cost calculation ──────────────────────────────────────────────
@@ -365,17 +372,26 @@ const TD = {padding:"0",fontSize:"13px",fontFamily:"'DM Sans',sans-serif",vertic
 
 
 // ── Role Form ─────────────────────────────────────────────────────
-function RoleForm({initial,onSave,onCancel,tax,ot}) {
+function RoleForm({initial,onSave,onCancel,taxForYear,ot}) {
   const blank={name:"",category:"BOH",payType:"Hourly",rate:"",defaultHours:35,otEligible:true,exempt:false,benefits:{...DEFAULT_BENEFITS},active:true};
   const [f,setF]=useState(initial?{...initial,benefits:{...DEFAULT_BENEFITS,...(initial.benefits||{})}}:blank);
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   const setB=(k,v)=>setF(p=>({...p,benefits:{...p.benefits,[k]:v}}));
 
-  const taxOk = tax?.finalized !== false; // treat undefined as ok for backwards compat
+  const activeTax = taxForYear || DEFAULT_TAX;
+  const taxOk = activeTax?.finalized !== false;
+  const minW = f.payType==="Hourly" && Number(f.rate)>0 && Number(f.rate)<(activeTax?.minWage||DEFAULT_TAX.minWage);
+
+  // Auto-exempt logic: derive from salary amount
+  const exemptThreshold = ot?.nonExemptWeeklyMin || DEFAULT_OT.nonExemptWeeklyMin;
+  const weeklyEquiv = f.payType==="Salary" ? (Number(f.rate)||0) / 4.33 : null;
+  const forcedNonExempt = f.payType==="Salary" && weeklyEquiv !== null && weeklyEquiv < exemptThreshold;
+  // Keep f.exempt in sync: if forced, always nonexempt
+  const effectiveExempt = forcedNonExempt ? false : f.exempt;
+
   const valid = f.name.trim() && f.rate!=="" && Number(f.rate)>0 && taxOk;
-  const minW = f.payType==="Hourly" && Number(f.rate)>0 && Number(f.rate)<(tax?.minWage||DEFAULT_TAX.minWage);
   const previewDays = DAYS.reduce((a,d,i)=>({...a,[d]:i<5?(f.defaultHours||0)/5:0}),{});
-  const prev = f.name.trim()&&f.rate!==""&&Number(f.rate)>0 ? calcRowCost({...f,rate:Number(f.rate)},previewDays,tax,ot) : null;
+  const prev = f.name.trim()&&f.rate!==""&&Number(f.rate)>0 ? calcRowCost({...f,exempt:effectiveExempt,rate:Number(f.rate)},previewDays,activeTax,ot) : null;
 
   const handlePayType = (v) => {
     set("payType",v);
@@ -387,7 +403,7 @@ function RoleForm({initial,onSave,onCancel,tax,ot}) {
     <Card style={{border:`1.5px solid ${CN.orange}`,marginBottom:"12px"}}>
       <Sub>{initial?"Edit Role":"Add New Role"}</Sub>
       {!taxOk&&<Note type="alert">⚠️ Finalize Tax & Regulations settings before adding roles — tax rates affect cost calculations.</Note>}
-      {minW&&<Note type="alert">⚠️ Rate ${f.rate}/hr is below WA minimum wage ${tax?.minWage||DEFAULT_TAX.minWage}/hr ({tax?.effectiveDate||"Jan 1, 2025"}).</Note>}
+      {minW&&<Note type="alert">⚠️ Rate ${f.rate}/hr is below WA minimum wage ${activeTax?.minWage||DEFAULT_TAX.minWage}/hr ({activeTax?.effectiveDate||"Jan 1, 2025"}).</Note>}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
         <div style={{gridColumn:"1/-1"}}><Field label="Job Title" value={f.name} onChange={v=>set("name",v)} placeholder="e.g. Line Cook"/></div>
         <Pick label="Category" value={f.category} onChange={v=>set("category",v)} options={CATEGORIES}/>
@@ -409,19 +425,26 @@ function RoleForm({initial,onSave,onCancel,tax,ot}) {
       {f.payType==="Salary"&&(
         <Card style={{backgroundColor:CN.creamDark,border:`1px solid ${CN.border}`,padding:"14px 16px",marginBottom:"12px"}}>
           <div style={{fontSize:"11px",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",color:CN.mid,marginBottom:"10px"}}>WA Salary Exemption Status</div>
+
+          {forcedNonExempt&&(
+            <Note type="warning">
+              ⚠️ Monthly salary of {fmt$(Number(f.rate)||0)} = <strong>{fmt$(weeklyEquiv||0)}/wk</strong> — below the WA exempt threshold of <strong>{fmt$(exemptThreshold)}/wk</strong>. This role <strong>must</strong> be classified as Nonexempt. Increase salary above {fmt$(exemptThreshold*4.33)}/mo to enable exempt classification.
+            </Note>
+          )}
+
           <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-            <label style={{display:"flex",alignItems:"flex-start",gap:"10px",cursor:"pointer",padding:"10px",backgroundColor:f.exempt?CN.purpleLight:"transparent",borderRadius:"8px",border:`1px solid ${f.exempt?CN.purple:CN.border}`}}>
-              <input type="radio" checked={f.exempt} onChange={()=>set("exempt",true)} style={{marginTop:"2px",accentColor:CN.purple}}/>
+            <label style={{display:"flex",alignItems:"flex-start",gap:"10px",cursor:forcedNonExempt?"not-allowed":"pointer",padding:"10px",backgroundColor:effectiveExempt?CN.purpleLight:"transparent",borderRadius:"8px",border:`1px solid ${effectiveExempt?CN.purple:CN.border}`,opacity:forcedNonExempt?0.4:1}}>
+              <input type="radio" checked={effectiveExempt} disabled={forcedNonExempt} onChange={()=>set("exempt",true)} style={{marginTop:"2px",accentColor:CN.purple}}/>
               <div>
                 <div style={{fontWeight:600,fontSize:"13px",color:CN.dark}}>Exempt (Executive / Administrative / Professional)</div>
-                <div style={{fontSize:"11px",color:CN.mid,marginTop:"2px"}}>Salary ≥ $1,332.80/week (WA 2025). No OT owed regardless of hours worked. Weekly cost is fixed.</div>
+                <div style={{fontSize:"11px",color:CN.mid,marginTop:"2px"}}>Salary ≥ {fmt$(exemptThreshold)}/wk. No OT owed regardless of hours. Weekly cost is fixed.</div>
               </div>
             </label>
-            <label style={{display:"flex",alignItems:"flex-start",gap:"10px",cursor:"pointer",padding:"10px",backgroundColor:!f.exempt?CN.amberLight:"transparent",borderRadius:"8px",border:`1px solid ${!f.exempt?CN.amber:CN.border}`}}>
-              <input type="radio" checked={!f.exempt} onChange={()=>set("exempt",false)} style={{marginTop:"2px",accentColor:CN.amber}}/>
+            <label style={{display:"flex",alignItems:"flex-start",gap:"10px",cursor:"pointer",padding:"10px",backgroundColor:!effectiveExempt?CN.amberLight:"transparent",borderRadius:"8px",border:`1px solid ${!effectiveExempt?CN.amber:CN.border}`}}>
+              <input type="radio" checked={!effectiveExempt} onChange={()=>set("exempt",false)} style={{marginTop:"2px",accentColor:CN.amber}}/>
               <div>
                 <div style={{fontWeight:600,fontSize:"13px",color:CN.dark}}>Nonexempt Salaried</div>
-                <div style={{fontSize:"11px",color:CN.mid,marginTop:"2px"}}>OT applies after {ot?.weeklyThreshold||40} hrs/week. Cost = salary + half-time premium for OT hours. Verify status with LNI: lni.wa.gov.</div>
+                <div style={{fontSize:"11px",color:CN.mid,marginTop:"2px"}}>OT applies after {ot?.weeklyThreshold||40} hrs/week. Cost = salary + half-time premium for OT hours. lni.wa.gov</div>
               </div>
             </label>
           </div>
@@ -453,7 +476,7 @@ function RoleForm({initial,onSave,onCancel,tax,ot}) {
         </div>
       )}
       <div style={{display:"flex",gap:"8px"}}>
-        <Btn onClick={()=>valid&&onSave({...f,id:initial?.id||uid(),rate:Number(f.rate)})} style={{opacity:valid?1:0.4}}>
+        <Btn onClick={()=>valid&&onSave({...f,id:initial?.id||uid(),rate:Number(f.rate),exempt:effectiveExempt})} style={{opacity:valid?1:0.4}}>
           {initial?"Save Changes":"Add Role"}
         </Btn>
         <Btn variant="secondary" onClick={onCancel}>Cancel</Btn>
@@ -463,11 +486,20 @@ function RoleForm({initial,onSave,onCancel,tax,ot}) {
 }
 
 // ── Roles Tab ─────────────────────────────────────────────────────
-function RolesTab({roleScenarios,setRoleScenarios,tax,ot,dirty,onSave,onClear,saving,isMobile}) {
+function RolesTab({roleScenarios,setRoleScenarios,taxYears,ot,dirty,onSave,onClear,saving,isMobile,isAdmin}) {
   const [adding,setAdding]=useState(false);
   const [editing,setEditing]=useState(null);
+  const [adminSaveConfirm,setAdminSaveConfirm]=useState(false); // admin editing default
+
   const activeScenario = roleScenarios.scenarios.find(s=>s.id===roleScenarios.activeId);
   const roles = activeScenario?.roles || [];
+  const isDefault = !!activeScenario?.isDefault;
+  const readOnly = isDefault && !isAdmin;
+  const hasCustomScenarios = roleScenarios.scenarios.some(s=>!s.isDefault);
+
+  // Use current calendar year's tax for role form
+  const currentYear = new Date().getFullYear();
+  const taxForYear = taxYears?.[currentYear] || null;
 
   const updateRoles = (fn) => {
     setRoleScenarios(prev=>({
@@ -491,11 +523,41 @@ function RolesTab({roleScenarios,setRoleScenarios,tax,ot,dirty,onSave,onClear,sa
       return {scenarios:remaining,activeId:prev.activeId===id?remaining[0]?.id||null:prev.activeId};
     });
   };
+  const copyDefaultToNew=()=>{
+    const name=`Custom — ${new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"})}`;
+    const newS=makeRoleScenario(name,roles,false);
+    setRoleScenarios(prev=>({scenarios:[...prev.scenarios,newS],activeId:newS.id}));
+  };
+
+  const handleSave=()=>{
+    if(isDefault&&isAdmin){setAdminSaveConfirm(true);}
+    else{onSave();}
+  };
 
   return (
     <div>
+      {/* Admin save confirmation modal */}
+      {adminSaveConfirm&&(
+        <div style={{position:"fixed",inset:0,backgroundColor:"rgba(0,0,0,0.5)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{backgroundColor:CN.white,borderRadius:14,padding:24,maxWidth:380,width:"100%",boxShadow:"0 16px 48px rgba(0,0,0,0.2)"}}>
+            <div style={{fontSize:28,marginBottom:8}}>⚠️</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:CN.dark,marginBottom:8,textTransform:"uppercase"}}>Save Default Roles</div>
+            <p style={{fontSize:13,color:CN.mid,marginBottom:20,lineHeight:1.6}}>
+              You are saving changes to the <strong>Default</strong> role scenario. This affects all users who haven't created a custom scenario. Continue?
+            </p>
+            <div style={{display:"flex",gap:8}}>
+              <Btn onClick={()=>{onSave();setAdminSaveConfirm(false);}}>Confirm Save</Btn>
+              <Btn variant="secondary" onClick={()=>setAdminSaveConfirm(false)}>Cancel</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"16px",flexWrap:"wrap",gap:"10px"}}>
-        <SHead title="Job Roles" sub="Define roles and rates per scenario. Each active role appears in the weekly schedule."/>
+        <div>
+          <SHead title="Job Roles" sub="Define roles and rates per scenario. Each active role appears in the weekly schedule."/>
+          {isDefault&&<span style={{display:"inline-block",fontSize:10,fontWeight:700,backgroundColor:CN.amberLight,color:"#92400E",padding:"2px 10px",borderRadius:99,textTransform:"uppercase",letterSpacing:"0.06em"}}>{isAdmin?"Default (admin edit enabled)":"Default — read only"}</span>}
+        </div>
         <ScenarioSelector
           scenarios={roleScenarios.scenarios}
           activeId={roleScenarios.activeId}
@@ -506,17 +568,39 @@ function RolesTab({roleScenarios,setRoleScenarios,tax,ot,dirty,onSave,onClear,sa
         />
       </div>
 
+      {/* No custom scenario warning */}
+      {!hasCustomScenarios&&(
+        <Note type="warning">
+          ⚠️ No custom role scenario exists yet. Copy the Default to create your own editable scenario, or ask an admin to make changes to the Default.
+        </Note>
+      )}
+
+      {/* Default read-only banner for non-admins */}
+      {isDefault&&!isAdmin&&(
+        <Note type="info">
+          This is the <strong>Default</strong> scenario and cannot be edited directly. Copy it to create your own custom scenario.
+        </Note>
+      )}
+
       {!activeScenario&&(
         <Note type="alert">No scenario selected. Create a scenario to start adding roles.</Note>
       )}
 
-      {activeScenario&&!adding&&!editing&&(
-        <div style={{marginBottom:"16px"}}>
-          <Btn onClick={()=>setAdding(true)}>+ Add Role</Btn>
+      {/* Actions row */}
+      {activeScenario&&(
+        <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+          {/* Add role — hidden for non-admin default */}
+          {(!isDefault||isAdmin)&&!adding&&!editing&&(
+            <Btn onClick={()=>setAdding(true)}>+ Add Role</Btn>
+          )}
+          {/* Copy default button */}
+          {isDefault&&(
+            <Btn variant="secondary" onClick={copyDefaultToNew}>Copy to New Scenario</Btn>
+          )}
         </div>
       )}
 
-      {adding&&<RoleForm onSave={saveRole} onCancel={()=>setAdding(false)} tax={tax} ot={ot}/>}
+      {adding&&<RoleForm onSave={saveRole} onCancel={()=>setAdding(false)} taxForYear={taxForYear} ot={ot}/>}
 
       {CATEGORIES.map(cat=>grouped[cat]?.length===0?null:(
         <div key={cat} style={{marginBottom:"24px"}}>
@@ -525,7 +609,7 @@ function RolesTab({roleScenarios,setRoleScenarios,tax,ot,dirty,onSave,onClear,sa
           </div>
           {grouped[cat].map(role=>(
             editing===role.id
-              ?<RoleForm key={role.id} initial={role} onSave={saveRole} onCancel={()=>setEditing(null)} tax={tax} ot={ot}/>
+              ?<RoleForm key={role.id} initial={role} onSave={saveRole} onCancel={()=>setEditing(null)} taxForYear={taxForYear} ot={ot}/>
               :(
                 <Card key={role.id} style={{padding:"14px 18px",opacity:role.active?1:0.5,marginBottom:"8px"}}>
                   <div style={{display:"flex",alignItems:"center",gap:"16px",flexWrap:"wrap"}}>
@@ -547,13 +631,13 @@ function RolesTab({roleScenarios,setRoleScenarios,tax,ot,dirty,onSave,onClear,sa
                     <div style={{textAlign:"right",marginRight:"8px"}}>
                       <div style={{fontSize:"10px",color:CN.mid}}>Weekly all-in (1 emp.)</div>
                       <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"18px",fontWeight:800,color:CN.orange}}>
-                        {fmt$(calcRowCost(role,DAYS.reduce((a,d,i)=>({...a,[d]:i<5?role.defaultHours/5:0}),{}),tax,ot).total)}
+                        {fmt$(calcRowCost(role,DAYS.reduce((a,d,i)=>({...a,[d]:i<5?role.defaultHours/5:0}),{}),taxForYear||DEFAULT_TAX,ot).total)}
                       </div>
                     </div>
                     <div style={{display:"flex",flexDirection:"column",gap:"2px"}}>
-                      <Btn variant="ghost" onClick={()=>setEditing(role.id)}>Edit</Btn>
-                      <Btn variant="ghost" onClick={()=>toggle(role.id)} style={{color:CN.mid}}>{role.active?"Deactivate":"Activate"}</Btn>
-                      <Btn variant="danger" onClick={()=>remove(role.id)}>Remove</Btn>
+                      <Btn variant="ghost" onClick={readOnly?null:()=>setEditing(role.id)} style={{opacity:readOnly?0.3:1,cursor:readOnly?"not-allowed":"pointer"}}>Edit</Btn>
+                      <Btn variant="ghost" onClick={readOnly?null:()=>toggle(role.id)} style={{color:CN.mid,opacity:readOnly?0.3:1,cursor:readOnly?"not-allowed":"pointer"}}>{role.active?"Deactivate":"Activate"}</Btn>
+                      <Btn variant="danger" onClick={readOnly?null:()=>remove(role.id)} style={{opacity:readOnly?0.3:1,cursor:readOnly?"not-allowed":"pointer"}}>Remove</Btn>
                     </div>
                   </div>
                 </Card>
@@ -568,7 +652,7 @@ function RolesTab({roleScenarios,setRoleScenarios,tax,ot,dirty,onSave,onClear,sa
           <p style={{fontSize:"13px"}}>No roles in this scenario. Add your first role to get started.</p>
         </div>
       )}
-      <SaveBar dirty={dirty} onSave={onSave} onClear={onClear} saving={saving} isMobile={isMobile}/>
+      <SaveBar dirty={dirty} onSave={handleSave} onClear={onClear} saving={saving} isMobile={isMobile}/>
       {isMobile&&<div style={{height:70}}/>}
     </div>
   );
@@ -576,14 +660,24 @@ function RolesTab({roleScenarios,setRoleScenarios,tax,ot,dirty,onSave,onClear,sa
 
 
 // ── Plan Tab ──────────────────────────────────────────────────────
-function PlanTab({roleScenarios,planScenarios,setPlanScenarios,tax,ot,dirty,onSave,onClear,saving,isMobile}) {
+function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty,onSave,onClear,saving,isMobile,isAdmin}) {
   const [selectedWeek,setSelectedWeek]=useState(isoMonday(toMonday(new Date())));
   const [activeDayIdx,setActiveDayIdx]=useState(()=>{ const d=new Date().getDay(); return d===0?6:d-1; });
+  const [adminSaveConfirm,setAdminSaveConfirm]=useState(false);
 
   const activePlanScenario = planScenarios.scenarios.find(s=>s.id===planScenarios.activeId);
   const linkedRoleScenarioId = activePlanScenario?.roleScenarioId;
   const linkedRoleScenario = roleScenarios.scenarios.find(s=>s.id===linkedRoleScenarioId);
   const availableRoles = (linkedRoleScenario?.roles||[]).filter(r=>r.active);
+
+  const isDefault = !!activePlanScenario?.isDefault;
+  const readOnly = isDefault && !isAdmin;
+  const hasCustomScenarios = planScenarios.scenarios.some(s=>!s.isDefault);
+
+  // Derive tax from selected week's year
+  const weekYear = parseInt(selectedWeek.slice(0,4));
+  const tax = taxYears?.[weekYear] || null;
+  const taxFinalized = !!tax?.finalized;
 
   const weekPlans = activePlanScenario?.plans.filter(p=>p.weekOf===selectedWeek) || [];
 
@@ -633,15 +727,46 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,tax,ot,dirty,onSa
       return{scenarios:remaining,activeId:prev.activeId===id?remaining[0]?.id||null:prev.activeId};
     });
   };
+  const copyDefaultToNew=()=>{
+    const name=`Custom — ${new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"})}`;
+    const newS=makePlanScenario(name,linkedRoleScenarioId||null,false);
+    // Copy current week's plans into the new scenario
+    newS.plans=(activePlanScenario?.plans||[]).map(p=>({...p,id:uid()}));
+    setPlanScenarios(prev=>({scenarios:[...prev.scenarios,newS],activeId:newS.id}));
+  };
+  const handleSave=()=>{
+    if(isDefault&&isAdmin){setAdminSaveConfirm(true);}
+    else{onSave();}
+  };
 
   const noRoleScenario = !linkedRoleScenario;
   const noRoles = availableRoles.length===0;
 
   return (
     <div>
+      {/* Admin save confirmation modal */}
+      {adminSaveConfirm&&(
+        <div style={{position:"fixed",inset:0,backgroundColor:"rgba(0,0,0,0.5)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{backgroundColor:CN.white,borderRadius:14,padding:24,maxWidth:380,width:"100%",boxShadow:"0 16px 48px rgba(0,0,0,0.2)"}}>
+            <div style={{fontSize:28,marginBottom:8}}>⚠️</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:CN.dark,marginBottom:8,textTransform:"uppercase"}}>Save Default Schedule</div>
+            <p style={{fontSize:13,color:CN.mid,marginBottom:20,lineHeight:1.6}}>
+              You are saving changes to the <strong>Default</strong> schedule scenario. This affects all users who haven't created a custom schedule. Continue?
+            </p>
+            <div style={{display:"flex",gap:8}}>
+              <Btn onClick={()=>{onSave();setAdminSaveConfirm(false);}}>Confirm Save</Btn>
+              <Btn variant="secondary" onClick={()=>setAdminSaveConfirm(false)}>Cancel</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header row */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"16px",flexWrap:"wrap",gap:"10px"}}>
-        <SHead title="Weekly Schedule" sub="Enter hours per employee per day."/>
+        <div>
+          <SHead title="Weekly Schedule" sub="Enter hours per employee per day."/>
+          {isDefault&&<span style={{display:"inline-block",fontSize:10,fontWeight:700,backgroundColor:CN.amberLight,color:"#92400E",padding:"2px 10px",borderRadius:99,textTransform:"uppercase",letterSpacing:"0.06em"}}>{isAdmin?"Default (admin edit enabled)":"Default — read only"}</span>}
+        </div>
         <div style={{display:"flex",flexDirection:"column",gap:"8px",alignItems:"flex-end"}}>
           <ScenarioSelector
             scenarios={planScenarios.scenarios}
@@ -666,12 +791,31 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,tax,ot,dirty,onSa
         </div>
       </div>
 
+      {/* No custom schedule warning */}
+      {!hasCustomScenarios&&(
+        <Note type="warning">
+          ⚠️ No custom schedule scenario exists yet. Copy the Default to create your own editable scenario.
+        </Note>
+      )}
+      {/* Default read-only banner */}
+      {isDefault&&!isAdmin&&(
+        <Note type="info">
+          This is the <strong>Default</strong> schedule and cannot be edited. Copy it to start your own.
+          <span style={{marginLeft:8}}><Btn variant="secondary" onClick={copyDefaultToNew} style={{fontSize:11,padding:"3px 10px"}}>Copy to New</Btn></span>
+        </Note>
+      )}
       {/* Validation gates */}
       {!activePlanScenario&&<Note type="alert">Create a schedule scenario to start planning.</Note>}
       {activePlanScenario&&noRoleScenario&&<Note type="alert">⚠️ Select a Job Role Scenario above to populate plannable roles.</Note>}
       {activePlanScenario&&linkedRoleScenario&&noRoles&&<Note type="warning">The selected role scenario has no active roles. Add roles in the Job Roles tab first.</Note>}
+      {/* Tax year gate — must be finalized for the week's year before costs shown */}
+      {activePlanScenario&&linkedRoleScenario&&!noRoles&&!taxFinalized&&(
+        <Note type="alert">
+          ⚠️ Tax &amp; Regulation settings for <strong>{weekYear}</strong> have not been finalized. Go to the <strong>Taxes &amp; Regulations</strong> tab, select year {weekYear}, complete all fields, and click Finalize to unlock cost calculations.
+        </Note>
+      )}
 
-      {activePlanScenario&&linkedRoleScenario&&!noRoles&&(
+      {activePlanScenario&&linkedRoleScenario&&!noRoles&&taxFinalized&&(
         <>
           {/* Week nav */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px",flexWrap:"wrap",gap:"8px"}}>
@@ -896,7 +1040,7 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,tax,ot,dirty,onSa
         </>
       )}
 
-      <SaveBar dirty={dirty} onSave={onSave} onClear={()=>onClear(selectedWeek)} saving={saving} isMobile={isMobile}/>
+      <SaveBar dirty={dirty} onSave={handleSave} onClear={()=>onClear(selectedWeek)} saving={saving} isMobile={isMobile}/>
       {isMobile&&<div style={{height:70}}/>}
     </div>
   );
@@ -904,7 +1048,16 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,tax,ot,dirty,onSa
 
 
 // ── Summary Tab ───────────────────────────────────────────────────
-function SummaryTab({roleScenarios,planScenarios,tax,ot,onRefresh}) {
+function SummaryTab({roleScenarios,planScenarios,taxYears,ot,onRefresh}) {
+  // Derive tax for each plan week's year; fall back to most recently finalized year or DEFAULT_TAX
+  const getTaxForYear = (year) => {
+    if (taxYears?.[year]?.finalized) return taxYears[year];
+    const finalized = Object.entries(taxYears||{}).filter(([,v])=>v?.finalized).sort(([a],[b])=>b-a);
+    return finalized.length ? finalized[0][1] : DEFAULT_TAX;
+  };
+  // For summary-level totals use current year
+  const currentYear = new Date().getFullYear();
+  const tax = getTaxForYear(currentYear);
   const isMobile=useIsMobile();
   const [compareIds,setCompareIds]=useState([]);
   const [activeView,setActiveView]=useState("single"); // "single" | "compare"
@@ -1181,64 +1334,106 @@ function SummaryTab({roleScenarios,planScenarios,tax,ot,onRefresh}) {
 
 
 // ── Taxes & Regulations Tab ───────────────────────────────────────
-function TaxTab({tax,setTax,ot,setOt,dirty,onSave,onClear,saving,isMobile}) {
-  const allFilled = tax.federalSS && tax.federalMedicare && tax.futa && tax.waSUI && tax.waLnI && tax.minWage && tax.effectiveDate;
+function TaxTab({taxYears,setTaxYears,selectedYear,setSelectedYear,ot,setOt,dirty,onSave,onClear,saving,isMobile}) {
+  const tax = taxYears?.[selectedYear] || defaultTaxForYear(selectedYear);
+  const setTax = (fn) => setTaxYears(prev=>({...prev,[selectedYear]:fn(prev[selectedYear]||defaultTaxForYear(selectedYear))}));
+
+  const allFilled = tax.federalSS && tax.federalMedicare && tax.futa && tax.waSUI && tax.waLnI && tax.minWage && tax.nonExemptWeeklyMin;
+  const currentYear = new Date().getFullYear();
+  const savedYears = Object.keys(taxYears||{}).map(Number).sort();
+  const displayYears = [...new Set([...savedYears, currentYear, currentYear+1])].sort();
+
+  const addYear = (year) => {
+    if (!taxYears?.[year]) {
+      setTaxYears(prev=>({...prev,[year]:defaultTaxForYear(year)}));
+    }
+    setSelectedYear(year);
+  };
 
   return (
     <div>
-      <SHead title="Taxes & Regulations" sub="Payroll tax rates and overtime rules. Verify every January — WA rates change annually."/>
+      <SHead title="Taxes & Regulations" sub="Payroll tax rates and overtime rules. Finalize each year before scheduling."/>
+
+      <Card style={{marginBottom:16}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          <Sub style={{margin:0}}>Tax Year</Sub>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {displayYears.map(y=>(
+              <button key={y} onClick={()=>addYear(y)} style={{
+                padding:"6px 18px",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer",
+                border:`2px solid ${selectedYear===y?CN.orange:CN.border}`,
+                backgroundColor:selectedYear===y?CN.orange:CN.white,
+                color:selectedYear===y?CN.white:CN.dark,
+                fontFamily:"'DM Sans',sans-serif",
+              }}>
+                {y}
+                {taxYears?.[y]?.finalized&&<span style={{marginLeft:5,fontSize:10}}>✓</span>}
+              </button>
+            ))}
+          </div>
+          {!tax.finalized&&<span style={{fontSize:11,color:CN.mid}}>Not finalized</span>}
+          {tax.finalized&&<span style={{fontSize:11,color:CN.green,fontWeight:700}}>✓ Finalized</span>}
+        </div>
+      </Card>
 
       {!tax.finalized&&(
         <Note type="warning">
-          ⚠️ Settings not finalized. Complete all fields and click <strong>Finalize Settings</strong> to unlock role creation.
+          ⚠️ {selectedYear} settings not finalized. Complete all fields and click <strong>Finalize {selectedYear}</strong> to unlock cost calculations for weeks in {selectedYear}.
         </Note>
       )}
       {tax.finalized&&(
-        <Note type="success">✓ Settings finalized. Roles can be created and cost calculations are active.</Note>
+        <Note type="success">✓ {selectedYear} settings finalized. Cost calculations are active for weeks in {selectedYear}.</Note>
       )}
 
       <Card>
         <Sub>Federal Taxes — Employer Portion</Sub>
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:"0 20px"}}>
-          <Field label="Social Security (%)" type="number" value={tax.federalSS} step={0.01} onChange={v=>setTax(p=>({...p,federalSS:v}))} note={`6.2% on first $${(tax.ssWageBase||176100).toLocaleString()}/yr. IRS Pub 15.`}/>
-          <Field label="Medicare (%)" type="number" value={tax.federalMedicare} step={0.01} onChange={v=>setTax(p=>({...p,federalMedicare:v}))} note="1.45% on all wages, no cap. IRS Pub 15."/>
-          <Field label="FUTA (%)" type="number" value={tax.futa} step={0.01} onChange={v=>setTax(p=>({...p,futa:v}))} note="Net after WA SUTA credit = 0.6%. First $7,000/employee/yr."/>
+          <Field label="Social Security (%)" type="number" value={tax.federalSS} step={0.01} onChange={v=>setTax(p=>({...p,federalSS:v}))} note="irs.gov — Pub 15"/>
+          <Field label="Medicare (%)" type="number" value={tax.federalMedicare} step={0.01} onChange={v=>setTax(p=>({...p,federalMedicare:v}))} note="irs.gov — Pub 15"/>
+          <Field label="FUTA (%)" type="number" value={tax.futa} step={0.01} onChange={v=>setTax(p=>({...p,futa:v}))} note="irs.gov"/>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:"0 20px"}}>
+          <Field label="SS Wage Base ($/yr)" type="number" value={tax.ssWageBase||176100} step={100} onChange={v=>setTax(p=>({...p,ssWageBase:v}))} note="irs.gov"/>
+          <Field label="WA SUI Wage Base ($/yr)" type="number" value={tax.suiWageBase||72800} step={100} onChange={v=>setTax(p=>({...p,suiWageBase:v}))} note="esd.wa.gov"/>
         </div>
       </Card>
 
       <Card>
         <Sub>Washington State — Employer Portion</Sub>
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:"0 20px"}}>
-          <Field label="WA SUI (%)" type="number" value={tax.waSUI} step={0.01} onChange={v=>setTax(p=>({...p,waSUI:v}))} note={`On first $${(tax.suiWageBase||72800).toLocaleString()}/yr per employee. New employer rate ~1.2%. Verify: esd.wa.gov.`}/>
-          <Field label="WA L&I ($/hr worked)" type="number" value={tax.waLnI} step={0.01} onChange={v=>setTax(p=>({...p,waLnI:v}))} note="Per hour worked. Restaurant risk class ~6901: approx $1.50–$2.50/hr. Verify: lni.wa.gov."/>
-          <Field label="WA PFML Employer (%)" type="number" value={tax.waPFML} step={0.01} onChange={v=>setTax(p=>({...p,waPFML:v}))} note="0% for employers under 50 employees. See paidleave.wa.gov."/>
-          <Field label="WA Minimum Wage ($/hr)" type="number" value={tax.minWage} step={0.01} onChange={v=>setTax(p=>({...p,minWage:v}))} note="$16.66/hr statewide Jan 1, 2025. Seattle large employer: $20.76. Source: lni.wa.gov."/>
+          <Field label="WA SUI (%)" type="number" value={tax.waSUI} step={0.01} onChange={v=>setTax(p=>({...p,waSUI:v}))} note="esd.wa.gov"/>
+          <Field label="WA L&I ($/hr worked)" type="number" value={tax.waLnI} step={0.01} onChange={v=>setTax(p=>({...p,waLnI:v}))} note="lni.wa.gov"/>
+          <Field label="WA PFML Employer (%)" type="number" value={tax.waPFML} step={0.01} onChange={v=>setTax(p=>({...p,waPFML:v}))} note="paidleave.wa.gov"/>
+          <Field label="WA Minimum Wage ($/hr)" type="number" value={tax.minWage} step={0.01} onChange={v=>setTax(p=>({...p,minWage:v}))} note="lni.wa.gov"/>
         </div>
-        <Field label="Rates effective date" value={tax.effectiveDate||""} onChange={v=>setTax(p=>({...p,effectiveDate:v}))} style={{maxWidth:"220px"}} note="Update this when you revise rates."/>
       </Card>
 
       <Card>
-        <Sub>Overtime Rules</Sub>
+        <Sub>Overtime & Exemption Rules</Sub>
         <Note>
-          WA follows federal FLSA: OT required after <strong>40 hrs/week at 1.5×</strong> for non-exempt employees (hourly or salaried-nonexempt).
-          WA has <strong>no daily OT</strong> requirement for adults. The daily max below is a <em>soft planning limit</em> only — it triggers a warning but does not alter cost calculations.
+          WA follows FLSA: OT required after <strong>40 hrs/week at 1.5×</strong> for non-exempt employees. WA has no daily OT requirement for adults. The daily max is a soft planning limit only.
         </Note>
-        <Note type="warning">
-          <strong>Salaried exempt employees</strong> (executive, administrative, professional) must earn ≥ <strong>$1,332.80/week</strong> (WA 2025, ~$69,305/yr) to qualify for exemption. Below this threshold, the role must be classified as <strong>nonexempt</strong> regardless of job duties. Verify classifications at lni.wa.gov.
-        </Note>
-        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:"0 20px",maxWidth:isMobile?"100%":"500px"}}>
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:"0 20px",maxWidth:isMobile?"100%":"600px"}}>
           <Field label="Weekly OT Threshold (hrs)" type="number" value={ot.weeklyThreshold} step={1} min={1} onChange={v=>setOt(p=>({...p,weeklyThreshold:v}))}/>
           <Field label="OT Multiplier" type="number" value={ot.multiplier} step={0.1} min={1} onChange={v=>setOt(p=>({...p,multiplier:v}))}/>
-          <Field label="Daily Max (soft limit, hrs)" type="number" value={ot.dailyMax} step={0.5} min={0} onChange={v=>setOt(p=>({...p,dailyMax:v}))} note="Set 0 to disable."/>
+          <Field label="Daily Max (soft, hrs)" type="number" value={ot.dailyMax} step={0.5} min={0} onChange={v=>setOt(p=>({...p,dailyMax:v}))} note="0 = disabled"/>
+        </div>
+        <div style={{maxWidth:isMobile?"100%":"300px"}}>
+          <Field
+            label={`WA Non-Exempt Salary Threshold ($/wk) — ${selectedYear}`}
+            type="number" value={tax.nonExemptWeeklyMin||1332.80} step={0.01} min={0}
+            onChange={v=>setTax(p=>({...p,nonExemptWeeklyMin:v}))}
+            note="lni.wa.gov — update each year. Salaried roles below this threshold are forced nonexempt."
+          />
         </div>
       </Card>
 
       <div style={{display:"flex",gap:"10px",alignItems:"center",flexWrap:"wrap",marginBottom:"8px"}}>
         {!tax.finalized&&allFilled&&(
-          <Btn onClick={()=>setTax(p=>({...p,finalized:true}))}>✓ Finalize Settings</Btn>
+          <Btn onClick={()=>setTax(p=>({...p,finalized:true}))}>✓ Finalize {selectedYear}</Btn>
         )}
         {tax.finalized&&(
-          <Btn variant="secondary" onClick={()=>setTax(p=>({...p,finalized:false}))}>Unlock to Edit</Btn>
+          <Btn variant="secondary" onClick={()=>setTax(p=>({...p,finalized:false}))}>Unlock {selectedYear} to Edit</Btn>
         )}
       </div>
 
@@ -1433,14 +1628,16 @@ export default function App({ currentUser }) {
   // Scenario state
   const [roleScenarios,setRoleScenarios]=useState(null);
   const [planScenarios,setPlanScenarios]=useState(null);
-  // Settings (shared)
-  const [tax,setTax]=useState(null);
+  // Settings (shared) — taxYears is a map { [year]: taxObject }
+  const [taxYears,setTaxYears]=useState(null);
   const [ot,setOt]=useState(null);
   // Saved snapshots
   const [savedRS,setSavedRS]=useState(null);
   const [savedPS,setSavedPS]=useState(null);
-  const [savedTax,setSavedTax]=useState(null);
+  const [savedTaxYears,setSavedTaxYears]=useState(null);
   const [savedOt,setSavedOt]=useState(null);
+  // Tax year selector (lives in App so switching year in TaxTab doesn't re-mount)
+  const [selectedTaxYear,setSelectedTaxYear]=useState(new Date().getFullYear());
   // Admin
   const [admins,setAdmins]=useState([]);       // array of userIds
   const [allUsers,setAllUsers]=useState([]);   // user registry
@@ -1479,25 +1676,28 @@ export default function App({ currentUser }) {
 
   // Migration: v2 shared → v3 per-user keys
   const migrate = useCallback(async () => {
-    // Priority: per-user key → shared key (prev version) → legacy roles/plans → defaults
     const defaultRoles = DEFAULT_ROLES.map(r => ({ ...r, exempt: r.payType === "Salary" }));
-    const defaultRS = { scenarios: [makeRoleScenario("Default", defaultRoles)], activeId: null };
+    const defaultRS = { scenarios: [makeRoleScenario("Default", defaultRoles, true)], activeId: null };
     defaultRS.activeId = defaultRS.scenarios[0].id;
-    const defaultPS = { scenarios: [makePlanScenario("Default", defaultRS.scenarios[0].id)], activeId: null };
+    const defaultPS = { scenarios: [makePlanScenario("Default", defaultRS.scenarios[0].id, true)], activeId: null };
     defaultPS.activeId = defaultPS.scenarios[0].id;
 
-    // Try shared key from previous version
+    // Try shared key from previous version — stamp first scenario as default
     const sharedRS = await loadS(SK.sharedRoleScenarios, null);
     const sharedPS = await loadS(SK.sharedPlanScenarios, null);
-    if (sharedRS) return { rs: sharedRS, ps: sharedPS || defaultPS };
+    if (sharedRS) {
+      const rs = { ...sharedRS, scenarios: sharedRS.scenarios.map((s,i)=>i===0?{...s,isDefault:true}:s) };
+      const ps = sharedPS ? { ...sharedPS, scenarios: sharedPS.scenarios.map((s,i)=>i===0?{...s,isDefault:true}:s) } : defaultPS;
+      return { rs, ps };
+    }
 
     // Try legacy individual roles/plans
     const legacyRoles = await loadS(SK.legacyRoles, null);
     const legacyPlans = await loadS(SK.legacyPlans, null);
     if (legacyRoles) {
-      const rs = { scenarios: [makeRoleScenario("Default", legacyRoles)], activeId: null };
+      const rs = { scenarios: [makeRoleScenario("Default", legacyRoles, true)], activeId: null };
       rs.activeId = rs.scenarios[0].id;
-      const ps = { scenarios: [makePlanScenario("Default", rs.scenarios[0].id)], activeId: null };
+      const ps = { scenarios: [makePlanScenario("Default", rs.scenarios[0].id, true)], activeId: null };
       if (legacyPlans) ps.scenarios[0].plans = legacyPlans;
       ps.activeId = ps.scenarios[0].id;
       return { rs, ps };
@@ -1532,10 +1732,16 @@ export default function App({ currentUser }) {
     if (!ps) { ps = (await getMigrated()).ps; }
     setPlanScenarios(ps); setSavedPS(deepClone(ps)); lastKnownAt.current[SK.planScenarios] = psData.updated_at;
 
-    // Tax/OT (shared)
-    const tData = await loadSWithTs(SHARED_SK.tax, DEFAULT_TAX);
-    const t = { ...DEFAULT_TAX, ...tData.value };
-    setTax(t); setSavedTax(deepClone(t)); lastKnownAt.current[SHARED_SK.tax] = tData.updated_at;
+    // Tax years (shared) — migrate from old single-year format if needed
+    const tyData = await loadSWithTs(SHARED_SK.taxYears, null);
+    let ty = tyData.value;
+    if (!ty) {
+      // Migrate from old cn-hc-tax-v3 single-year format
+      const oldTax = await loadS(SHARED_SK.tax, null);
+      const year = new Date().getFullYear();
+      ty = oldTax ? { [year]: { ...DEFAULT_TAX, ...oldTax } } : {};
+    }
+    setTaxYears(ty); setSavedTaxYears(deepClone(ty)); lastKnownAt.current[SHARED_SK.taxYears] = tyData.updated_at;
 
     const oData = await loadSWithTs(SHARED_SK.ot, DEFAULT_OT);
     const o = { ...DEFAULT_OT, ...oData.value };
@@ -1576,7 +1782,7 @@ export default function App({ currentUser }) {
 
   const saveRoles = () => doSave("roles", [{ key: SK.roleScenarios, val: roleScenarios, setSaved: setSavedRS }]);
   const savePlans = () => doSave("plans", [{ key: SK.planScenarios, val: planScenarios, setSaved: setSavedPS }]);
-  const saveSettings = () => doSave("settings", [{ key: SHARED_SK.tax, val: tax, setSaved: setSavedTax }, { key: SHARED_SK.ot, val: ot, setSaved: setSavedOt }]);
+  const saveSettings = () => doSave("settings", [{ key: SHARED_SK.taxYears, val: taxYears, setSaved: setSavedTaxYears }, { key: SHARED_SK.ot, val: ot, setSaved: setSavedOt }]);
 
   const clearRoles = () => setRoleScenarios(deepClone(savedRS));
   const clearPlansWeek = (weekOf) => {
@@ -1591,7 +1797,7 @@ export default function App({ currentUser }) {
       } : s)
     }));
   };
-  const clearSettings = () => { setTax(deepClone(savedTax)); setOt(deepClone(savedOt)); };
+  const clearSettings = () => { setTaxYears(deepClone(savedTaxYears)); setOt(deepClone(savedOt)); };
 
   // Admin actions
   const claimAdmin = async () => {
@@ -1613,7 +1819,7 @@ export default function App({ currentUser }) {
   // Dirty flags
   const rolesDirty = !!savedRS && JSON.stringify(roleScenarios) !== JSON.stringify(savedRS);
   const plansDirty = !!savedPS && JSON.stringify(planScenarios) !== JSON.stringify(savedPS);
-  const settingsDirty = !!savedTax && (JSON.stringify(tax) !== JSON.stringify(savedTax) || JSON.stringify(ot) !== JSON.stringify(savedOt));
+  const settingsDirty = !!savedTaxYears && (JSON.stringify(taxYears) !== JSON.stringify(savedTaxYears) || JSON.stringify(ot) !== JSON.stringify(savedOt));
 
   const TABS = [
     { id: "roles",   label: "Job Roles",      icon: tabIcons.roles,   dirty: rolesDirty },
@@ -1733,20 +1939,22 @@ export default function App({ currentUser }) {
       <div style={{maxWidth:"1200px",margin:"0 auto",padding:isMobile?"16px 12px":"28px 24px"}}>
         {tab==="roles"&&roleScenarios&&<RolesTab
           roleScenarios={roleScenarios} setRoleScenarios={setRoleScenarios}
-          tax={tax} ot={ot}
+          taxYears={taxYears} ot={ot} isAdmin={isAdmin}
           dirty={rolesDirty} onSave={saveRoles} onClear={clearRoles} saving={saving.roles} isMobile={isMobile}
         />}
         {tab==="plan"&&planScenarios&&roleScenarios&&<PlanTab
           roleScenarios={roleScenarios} planScenarios={planScenarios} setPlanScenarios={setPlanScenarios}
-          tax={tax} ot={ot}
+          taxYears={taxYears} ot={ot} isAdmin={isAdmin}
           dirty={plansDirty} onSave={savePlans} onClear={clearPlansWeek} saving={saving.plans} isMobile={isMobile}
         />}
         {tab==="summary"&&<SummaryTab
           roleScenarios={roleScenarios||{scenarios:[]}} planScenarios={planScenarios||{scenarios:[]}}
-          tax={tax} ot={ot} onRefresh={()=>loadAll(false)}
+          taxYears={taxYears} ot={ot} onRefresh={()=>loadAll(false)}
         />}
-        {tab==="settings"&&tax&&ot&&<TaxTab
-          tax={tax} setTax={setTax} ot={ot} setOt={setOt}
+        {tab==="settings"&&taxYears&&ot&&<TaxTab
+          taxYears={taxYears} setTaxYears={setTaxYears}
+          selectedYear={selectedTaxYear} setSelectedYear={setSelectedTaxYear}
+          ot={ot} setOt={setOt}
           dirty={settingsDirty} onSave={saveSettings} onClear={clearSettings} saving={saving.settings} isMobile={isMobile}
         />}
         {tab==="admin"&&isAdmin&&<AdminTab
