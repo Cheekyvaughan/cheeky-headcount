@@ -37,7 +37,7 @@ function defaultTaxForYear(year) {
     federalSS: 6.2, federalMedicare: 1.45, futa: 0.6,
     waSUI: 1.2, waLnI: 1.85, waPFML: 0,
     ssWageBase: 176100, suiWageBase: 72800,
-    minWage: 16.66, nonExemptWeeklyMin: 1332.80,
+    minWage: 16.66, minWageMinor: 0, nonExemptWeeklyMin: 1332.80,
     effectiveDate: `Jan 1, ${year}`,
     finalized: false,
   };
@@ -122,17 +122,20 @@ function calcRowCost(role, dayHours, tax, ot) {
   let wages=0, otPremium=0, otHrs=0;
 
   if (role.payType==="Hourly") {
+    // Minors: effective rate is max(role.rate, minWageMinor) when minWageMinor is set
+    const effectiveRate = (role.isMinor && T.minWageMinor > 0)
+      ? Math.max(role.rate, T.minWageMinor)
+      : role.rate;
     const reg = Math.min(totalHrs, O.weeklyThreshold);
     otHrs = role.otEligible ? Math.max(0, totalHrs - O.weeklyThreshold) : 0;
-    wages = reg*role.rate + otHrs*role.rate*O.multiplier;
-    otPremium = otHrs*role.rate*(O.multiplier-1);
+    wages = reg*effectiveRate + otHrs*effectiveRate*O.multiplier;
+    otPremium = otHrs*effectiveRate*(O.multiplier-1);
   } else {
     // Salary
     const weeklyRate = role.rate / 4.33;
     if (role.exempt) {
-      wages = weeklyRate; // Never changes regardless of hours
+      wages = weeklyRate;
     } else {
-      // Nonexempt salaried: salary covers all straight time, add half-time for OT
       const derivedHourly = weeklyRate / O.weeklyThreshold;
       otHrs = Math.max(0, totalHrs - O.weeklyThreshold);
       otPremium = derivedHourly * (O.multiplier - 1) * otHrs;
@@ -152,12 +155,14 @@ function calcRowCost(role, dayHours, tax, ot) {
   return { wages, otPremium, taxes, benefits, total:wages+taxes+benefits, otHrs, totalHrs, taxBreakdown:tb };
 }
 
+const MINOR_WEEKLY_MAX = 40; // WA: under-16 hard cap — RCW 49.12
+
 function rowStatus(role, dayHours, ot) {
   const O = ot||DEFAULT_OT;
   const totalHrs = DAYS.reduce((s,d)=>s+(parseFloat(dayHours[d])||0),0);
   const maxDay = Math.max(...DAYS.map(d=>parseFloat(dayHours[d])||0));
+  if (role.isMinor && totalHrs > MINOR_WEEKLY_MAX) return "minormax";
   if (O.dailyMax>0 && maxDay>O.dailyMax) return "daymax";
-  // Exempt salaried: never flag OT
   const otApplies = role.payType==="Hourly" ? role.otEligible : !role.exempt;
   if (otApplies && totalHrs>O.weeklyThreshold) return "ot";
   if (otApplies && totalHrs>=O.weeklyThreshold*0.85) return "nearot";
@@ -165,10 +170,11 @@ function rowStatus(role, dayHours, ot) {
 }
 
 const STATUS = {
-  ok:     { rowBg:"transparent",  icon:null,  },
-  nearot: { rowBg:"#FFFDF0",      icon:"🔶",  },
-  ot:     { rowBg:"#FEF3C7",      icon:"⚠️",  },
-  daymax: { rowBg:"#FEE2E2",      icon:"🚨",  },
+  ok:       { rowBg:"transparent",  icon:null,  },
+  nearot:   { rowBg:"#FFFDF0",      icon:"🔶",  },
+  ot:       { rowBg:"#FEF3C7",      icon:"⚠️",  },
+  daymax:   { rowBg:"#FEE2E2",      icon:"🚨",  },
+  minormax: { rowBg:"#FEE2E2",      icon:"🔞",  },
 };
 
 // ── Storage helpers ───────────────────────────────────────────────
@@ -373,23 +379,28 @@ const TD = {padding:"0",fontSize:"13px",fontFamily:"'DM Sans',sans-serif",vertic
 
 // ── Role Form ─────────────────────────────────────────────────────
 function RoleForm({initial,onSave,onCancel,taxForYear,ot}) {
-  const blank={name:"",category:"BOH",payType:"Hourly",rate:"",defaultHours:35,otEligible:true,exempt:false,benefits:{...DEFAULT_BENEFITS},active:true};
+  const blank={name:"",category:"BOH",payType:"Hourly",rate:"",defaultHours:35,otEligible:true,exempt:false,isMinor:false,benefits:{...DEFAULT_BENEFITS},active:true};
   const [f,setF]=useState(initial?{...initial,benefits:{...DEFAULT_BENEFITS,...(initial.benefits||{})}}:blank);
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   const setB=(k,v)=>setF(p=>({...p,benefits:{...p.benefits,[k]:v}}));
 
   const activeTax = taxForYear || DEFAULT_TAX;
   const taxOk = activeTax?.finalized !== false;
-  const minW = f.payType==="Hourly" && Number(f.rate)>0 && Number(f.rate)<(activeTax?.minWage||DEFAULT_TAX.minWage);
+
+  // Minor wage validation — only relevant for hourly
+  const minorWageSet = activeTax.minWageMinor > 0;
+  const effectiveMinWage = f.isMinor && minorWageSet ? activeTax.minWageMinor : activeTax.minWage || DEFAULT_TAX.minWage;
+  const minW = f.payType==="Hourly" && Number(f.rate)>0 && Number(f.rate) < effectiveMinWage;
+  // Minors cannot be salaried (not eligible for WA exemption under 18)
+  const minorBlocksSalary = f.isMinor && f.payType==="Salary";
 
   // Auto-exempt logic: derive from salary amount
   const exemptThreshold = ot?.nonExemptWeeklyMin || DEFAULT_OT.nonExemptWeeklyMin;
   const weeklyEquiv = f.payType==="Salary" ? (Number(f.rate)||0) / 4.33 : null;
   const forcedNonExempt = f.payType==="Salary" && weeklyEquiv !== null && weeklyEquiv < exemptThreshold;
-  // Keep f.exempt in sync: if forced, always nonexempt
   const effectiveExempt = forcedNonExempt ? false : f.exempt;
 
-  const valid = f.name.trim() && f.rate!=="" && Number(f.rate)>0 && taxOk;
+  const valid = f.name.trim() && f.rate!=="" && Number(f.rate)>0 && taxOk && !minorBlocksSalary;
   const previewDays = DAYS.reduce((a,d,i)=>({...a,[d]:i<5?(f.defaultHours||0)/5:0}),{});
   const prev = f.name.trim()&&f.rate!==""&&Number(f.rate)>0 ? calcRowCost({...f,exempt:effectiveExempt,rate:Number(f.rate)},previewDays,activeTax,ot) : null;
 
@@ -399,17 +410,40 @@ function RoleForm({initial,onSave,onCancel,taxForYear,ot}) {
     else { set("otEligible",true); set("exempt",false); }
   };
 
+  const handleMinorToggle = (checked) => {
+    set("isMinor", checked);
+    // Minors must be hourly — revert salary if toggled on
+    if (checked && f.payType==="Salary") {
+      set("payType","Hourly"); set("otEligible",true); set("exempt",false);
+    }
+  };
+
   return (
     <Card style={{border:`1.5px solid ${CN.orange}`,marginBottom:"12px"}}>
       <Sub>{initial?"Edit Role":"Add New Role"}</Sub>
       {!taxOk&&<Note type="alert">⚠️ Finalize Tax & Regulations settings before adding roles — tax rates affect cost calculations.</Note>}
-      {minW&&<Note type="alert">⚠️ Rate ${f.rate}/hr is below WA minimum wage ${activeTax?.minWage||DEFAULT_TAX.minWage}/hr ({activeTax?.effectiveDate||"Jan 1, 2025"}).</Note>}
+      {minW&&<Note type="alert">⚠️ Rate ${f.rate}/hr is below the {f.isMinor?"minor":"WA"} minimum wage of ${effectiveMinWage}/hr. lni.wa.gov</Note>}
+      {minorBlocksSalary&&<Note type="alert">⚠️ Workers under 16 cannot hold salaried-exempt positions under WA law. Switch to Hourly.</Note>}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
         <div style={{gridColumn:"1/-1"}}><Field label="Job Title" value={f.name} onChange={v=>set("name",v)} placeholder="e.g. Line Cook"/></div>
         <Pick label="Category" value={f.category} onChange={v=>set("category",v)} options={CATEGORIES}/>
-        <Pick label="Pay Type" value={f.payType} onChange={handlePayType} options={PAY_TYPES}/>
+        <Pick label="Pay Type" value={f.payType} onChange={handlePayType} options={f.isMinor?["Hourly"]:PAY_TYPES}/>
         <Field label={f.payType==="Hourly"?"Hourly Rate ($)":"Monthly Salary ($)"} type="number" value={f.rate} onChange={v=>set("rate",v)} min={0} step={0.5}/>
-        {f.payType==="Hourly"&&<Field label="Default Hrs/Week" type="number" value={f.defaultHours} onChange={v=>set("defaultHours",v)} min={0} step={1}/>}
+        {f.payType==="Hourly"&&<Field label="Default Hrs/Week" type="number" value={f.defaultHours} onChange={v=>set("defaultHours",v)} min={0} max={f.isMinor?MINOR_WEEKLY_MAX:undefined} step={1}/>}
+      </div>
+
+      {/* Minor toggle */}
+      <div style={{marginBottom:"12px",padding:"12px 14px",backgroundColor:f.isMinor?CN.amberLight:CN.creamDark,borderRadius:8,border:`1px solid ${f.isMinor?CN.amber:CN.border}`}}>
+        <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+          <input type="checkbox" checked={!!f.isMinor} onChange={e=>handleMinorToggle(e.target.checked)}
+            style={{width:15,height:15,accentColor:CN.amber}}/>
+          <div>
+            <div style={{fontWeight:700,fontSize:"13px",color:CN.dark}}>Minor (under 16)</div>
+            <div style={{fontSize:"11px",color:CN.mid,marginTop:2}}>
+              Caps weekly hours at {MINOR_WEEKLY_MAX}h. Applies minor minimum wage if set.{f.isMinor&&minorWageSet?` Effective rate: $${effectiveMinWage}/hr min.`:""} lni.wa.gov
+            </div>
+          </div>
+        </label>
       </div>
 
       {f.payType==="Hourly"&&(
@@ -449,6 +483,23 @@ function RoleForm({initial,onSave,onCancel,taxForYear,ot}) {
             </label>
           </div>
         </Card>
+      )}
+
+      {/* Minor toggle — only relevant for hourly roles */}
+      {f.payType==="Hourly"&&(
+        <div style={{marginBottom:"12px",padding:"12px 14px",backgroundColor:f.isMinor?CN.amberLight:"transparent",border:`1px solid ${f.isMinor?CN.amber:CN.border}`,borderRadius:8}}>
+          <label style={{display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer"}}>
+            <input type="checkbox" checked={!!f.isMinor} onChange={e=>set("isMinor",e.target.checked)}
+              style={{width:15,height:15,marginTop:2,accentColor:CN.amber,flexShrink:0}}/>
+            <div>
+              <div style={{fontWeight:600,fontSize:13,color:CN.dark}}>Role occupied by a minor (&lt;16 years)</div>
+              <div style={{fontSize:11,color:CN.mid,marginTop:2}}>
+                Applies WA minor minimum wage if set. Enforces the {MINOR_WEEKLY_MAX}-hour weekly hard cap (RCW 49.12). Schedule will block hours above this limit.
+                {activeTax?.minWageMinor>0&&<span style={{marginLeft:4,fontWeight:600,color:"#92400E"}}>Minor rate: {fmt$(activeTax.minWageMinor)}/hr for this year.</span>}
+              </div>
+            </div>
+          </label>
+        </div>
       )}
 
       <div style={{borderTop:`1px solid ${CN.border}`,paddingTop:"16px",marginTop:"4px"}}>
@@ -622,6 +673,7 @@ function RolesTab({roleScenarios,setRoleScenarios,taxYears,ot,dirty,onSave,onCle
                           </span>
                         )}
                         {role.payType==="Hourly"&&role.otEligible&&<span style={{fontSize:"10px",fontWeight:700,backgroundColor:CN.amberLight,color:"#92400E",padding:"1px 7px",borderRadius:"99px"}}>OT eligible</span>}
+                        {role.isMinor&&<span style={{fontSize:"10px",fontWeight:700,backgroundColor:"#FEF3C7",color:"#92400E",padding:"1px 7px",borderRadius:"99px"}}>⚠ Minor &lt;16</span>}
                         {!role.active&&<span style={{fontSize:"11px",color:CN.mid}}>(inactive)</span>}
                       </div>
                       <div style={{fontSize:"12px",color:CN.mid}}>
@@ -690,7 +742,18 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
 
   const updateDay=(planId,day,val)=>{
     const num=val===""?"":(Math.round(parseFloat(val)*2)/2);
-    updatePlans(ps=>ps.map(p=>p.id===planId?{...p,days:{...p.days,[day]:num}}:p));
+    // Minor hard cap: total across the week cannot exceed MINOR_WEEKLY_MAX
+    // Calculate what the new weekly total would be and clamp if minor role
+    updatePlans(ps=>ps.map(p=>{
+      if(p.id!==planId) return p;
+      const role=availableRoles.find(r=>r.id===p.roleId);
+      if(role?.isMinor && num!==""){
+        const otherDaysTotal=DAYS.filter(d=>d!==day).reduce((s,d)=>s+(parseFloat(p.days[d])||0),0);
+        const allowed=Math.max(0, MINOR_WEEKLY_MAX - otherDaysTotal);
+        return {...p,days:{...p.days,[day]:Math.min(num,allowed)}};
+      }
+      return {...p,days:{...p.days,[day]:num}};
+    }));
   };
   const addRow=(roleId)=>updatePlans(ps=>[...ps,{id:uid(),weekOf:selectedWeek,roleId,days:emptyDays()}]);
   const removeRow=(planId)=>updatePlans(ps=>ps.filter(p=>p.id!==planId));
@@ -975,24 +1038,31 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
                                     <div>
                                       <div style={{fontWeight:600,color:CN.dark,fontSize:"12px",display:"flex",alignItems:"center",gap:"4px"}}>
                                         {STATUS[st].icon&&<span>{STATUS[st].icon}</span>}{role.name}
+                                        {role.isMinor&&<span style={{fontSize:"9px",fontWeight:700,backgroundColor:"#FEF3C7",color:"#92400E",padding:"1px 5px",borderRadius:99}}>Minor</span>}
                                       </div>
                                       <div style={{fontSize:"10px",color:CN.mid}}>
                                         #{empIdx+1} · {role.payType==="Hourly"?`${fmt$(role.rate)}/hr`:`${fmt$(role.rate)}/mo`}
                                         {role.payType==="Salary"&&<span style={{marginLeft:"4px",color:role.exempt?CN.purple:CN.amberDark}}>({role.exempt?"exempt":"nonexempt"})</span>}
+                                        {role.isMinor&&<span style={{marginLeft:4,color:st==="minormax"?CN.red:CN.mid}}> · {Math.max(0,MINOR_WEEKLY_MAX-cost.totalHrs).toFixed(1)}h left this wk</span>}
                                       </div>
                                       {cost.otHrs>0&&<div style={{fontSize:"10px",color:CN.amberDark,fontWeight:700}}>+{cost.otHrs.toFixed(1)}h OT · +{fmt$(cost.otPremium)}</div>}
                                     </div>
                                     <button onClick={()=>{if(!readOnly)removeRow(plan.id);}} style={{border:"none",background:"none",cursor:"pointer",color:CN.border,fontSize:"13px",padding:"0",lineHeight:1}}>✕</button>
                                   </div>
                                 </td>
-                                {DAYS.map(d=>{
+                              {DAYS.map(d=>{
                                   const h=plan.days[d]; const hNum=parseFloat(h)||0;
                                   const overDay=O.dailyMax>0&&hNum>O.dailyMax;
+                                  // For minors: show remaining capacity in cell title; tint at-cap cells
+                                  const otherDaysTotal=role.isMinor?DAYS.filter(dd=>dd!==d).reduce((s,dd)=>s+(parseFloat(plan.days[dd])||0),0):0;
+                                  const minorAtCap=role.isMinor&&(otherDaysTotal+hNum)>=MINOR_WEEKLY_MAX;
+                                  const cellRed=overDay||minorAtCap;
                                   return (
                                     <td key={d} style={{...TD,padding:"5px 4px"}}>
-                                      <input type="number" min={0} max={24} step={0.5} value={h} placeholder="–"
+                                      <input type="number" min={0} max={role.isMinor?Math.max(0,MINOR_WEEKLY_MAX-(otherDaysTotal)):24} step={0.5} value={h} placeholder="–"
+                                        title={role.isMinor?`Minor: ${Math.max(0,MINOR_WEEKLY_MAX-otherDaysTotal-hNum).toFixed(1)}h remaining this week`:""}
                                         onChange={e=>updateDay(plan.id,d,e.target.value)}
-                                        style={{width:"100%",textAlign:"center",border:`1.5px solid ${overDay?CN.red:hNum>0?CN.border:CN.creamDark}`,borderRadius:"6px",padding:"6px 2px",fontSize:"13px",fontFamily:"'DM Sans',sans-serif",backgroundColor:overDay?"#FEE2E2":hNum>0?CN.white:CN.creamDark,color:overDay?CN.red:CN.dark,outline:"none",boxSizing:"border-box"}}
+                                        style={{width:"100%",textAlign:"center",border:`1.5px solid ${cellRed?CN.red:hNum>0?CN.border:CN.creamDark}`,borderRadius:"6px",padding:"6px 2px",fontSize:"13px",fontFamily:"'DM Sans',sans-serif",backgroundColor:cellRed?"#FEE2E2":hNum>0?CN.white:CN.creamDark,color:cellRed?CN.red:CN.dark,outline:"none",boxSizing:"border-box"}}
                                       />
                                     </td>
                                   );
@@ -1404,7 +1474,8 @@ function TaxTab({taxYears,setTaxYears,selectedYear,setSelectedYear,ot,setOt,dirt
           <Field label="WA SUI (%)" type="number" value={tax.waSUI} step={0.01} onChange={v=>setTax(p=>({...p,waSUI:v}))} note="esd.wa.gov"/>
           <Field label="WA L&I ($/hr worked)" type="number" value={tax.waLnI} step={0.01} onChange={v=>setTax(p=>({...p,waLnI:v}))} note="lni.wa.gov"/>
           <Field label="WA PFML Employer (%)" type="number" value={tax.waPFML} step={0.01} onChange={v=>setTax(p=>({...p,waPFML:v}))} note="paidleave.wa.gov"/>
-          <Field label="WA Minimum Wage ($/hr)" type="number" value={tax.minWage} step={0.01} onChange={v=>setTax(p=>({...p,minWage:v}))} note="lni.wa.gov"/>
+          <Field label="WA Minimum Wage — Adult ($/hr)" type="number" value={tax.minWage} step={0.01} onChange={v=>setTax(p=>({...p,minWage:v}))} note="lni.wa.gov"/>
+          <Field label="WA Minimum Wage — Minor under 16 ($/hr)" type="number" value={tax.minWageMinor||""} placeholder="0 = same as adult" step={0.01} min={0} onChange={v=>setTax(p=>({...p,minWageMinor:v===""?0:v}))} note="lni.wa.gov — WA allows 85% of adult min wage for minors. Leave blank or 0 if not applicable."/>
         </div>
       </Card>
 
