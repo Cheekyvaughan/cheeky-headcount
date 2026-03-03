@@ -1990,7 +1990,7 @@ Input mode: ${inputMode}
 
 Distribute hours thoughtfully across operating days, weighting heavier days appropriately. Keep total hours per role close to the rule-engine totals. Return ONLY the narrative then the JSON block.`;
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("https://cheeky-headcount-proxy.vaughan-184.workers.dev/forecast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
