@@ -22,12 +22,23 @@ if (!window.storage) {
 
 // ── Brand ─────────────────────────────────────────────────────────
 const CN = {
-  orange: "#F43A0A", orangeHover: "#D4320A", orangeLight: "#FDE8E2",
-  cream: "#FAF4E4", creamDark: "#F0E8D0", dark: "#1C1208", mid: "#7A6A58",
-  border: "#E0D4BC", white: "#FFFFFF", amber: "#F59E0B", amberLight: "#FEF3C7",
-  amberDark: "#D97706", red: "#DC2626", redLight: "#FEE2E2",
-  blue: "#2563EB", blueLight: "#DBEAFE", purple: "#7C3AED", purpleLight: "#EDE9FE",
-  green: "#16A34A", greenLight: "#DCFCE7",
+  // Red (Primary) — brand, CTAs, header
+  orange: "#FF3B00", orangeHover: "#D93200", orangeLight: "#FFEDE8",
+  // Cream (Primary) — backgrounds
+  cream: "#FBF5DF", creamDark: "#EFE7C8",
+  // Black + Slate — text
+  dark: "#3C3C37", mid: "#494843",
+  // Grey — structure
+  border: "#EAE6E5", white: "#FFFFFF",
+  // Yellow — warnings
+  amber: "#F0B030", amberLight: "#FFF5CC", amberDark: "#C88800",
+  // Red dark — errors
+  red: "#CC2800", redLight: "#FFE0D8",
+  // Jungle — info, comparison, positive
+  blue: "#09A387", blueLight: "#D0EFE8",
+  green: "#078A72", greenLight: "#D0EFE8",
+  // Slate-toned — exempt badges (no purple in brand palette)
+  purple: "#494843", purpleLight: "#E8E6DF",
 };
 
 // ── Defaults ──────────────────────────────────────────────────────
@@ -172,9 +183,9 @@ function rowStatus(role, dayHours, ot) {
 const STATUS = {
   ok:       { rowBg:"transparent",  icon:null,  },
   nearot:   { rowBg:"#FFFDF0",      icon:"🔶",  },
-  ot:       { rowBg:"#FEF3C7",      icon:"⚠️",  },
-  daymax:   { rowBg:"#FEE2E2",      icon:"🚨",  label:"Potential Max Time" },
-  minormax: { rowBg:"#FEE2E2",      icon:"🔞",  },
+  ot:       { rowBg:"#FFF5CC",      icon:"⚠️",  },
+  daymax:   { rowBg:"#FFE0D8",      icon:"🚨",  label:"Potential Max Time" },
+  minormax: { rowBg:"#FFE0D8",      icon:"🔞",  },
 };
 
 // ── Storage helpers ───────────────────────────────────────────────
@@ -272,7 +283,7 @@ function SaveBar({dirty,onSave,onClear,saving,isMobile}) {
       <div style={{display:"flex",gap:"8px"}}>
         <button onClick={handleClear}
           style={{padding:"7px 14px",border:`1.5px solid ${confirmClear?CN.red:CN.border}`,borderRadius:"8px",
-            backgroundColor:confirmClear?"#FEE2E2":CN.white,color:confirmClear?CN.red:CN.mid,
+            backgroundColor:confirmClear?"#FFE0D8":CN.white,color:confirmClear?CN.red:CN.mid,
             fontSize:"12px",fontWeight:700,cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",
             textTransform:"uppercase",letterSpacing:"0.06em",transition:"all 0.15s"}}>
           {confirmClear?"Confirm clear":"Clear"}
@@ -692,7 +703,7 @@ function RolesTab({roleScenarios,setRoleScenarios,taxYears,ot,dirty,onSave,onCle
                           </span>
                         )}
                         {role.payType==="Hourly"&&role.otEligible&&<span style={{fontSize:"10px",fontWeight:700,backgroundColor:CN.amberLight,color:"#92400E",padding:"1px 7px",borderRadius:"99px"}}>OT eligible</span>}
-                        {role.isMinor&&<span style={{fontSize:"10px",fontWeight:700,backgroundColor:"#FEF3C7",color:"#92400E",padding:"1px 7px",borderRadius:"99px"}}>⚠ Minor &lt;16</span>}
+                        {role.isMinor&&<span style={{fontSize:"10px",fontWeight:700,backgroundColor:"#FFF5CC",color:"#92400E",padding:"1px 7px",borderRadius:"99px"}}>⚠ Minor &lt;16</span>}
                         {!role.active&&<span style={{fontSize:"11px",color:CN.mid}}>(inactive)</span>}
                       </div>
                       <div style={{fontSize:"12px",color:CN.mid}}>
@@ -931,7 +942,7 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
 
           {/* Legend */}
           <div style={{display:"flex",gap:"14px",marginBottom:"12px",flexWrap:"wrap"}}>
-            {[["#FFFDF0","🔶",`Approaching OT (≥${Math.round(O.weeklyThreshold*0.85)}h)`],["#FEF3C7","⚠️",`Overtime (>${O.weeklyThreshold}h/week)`],["#FEE2E2","🚨",`Daily max exceeded (>${O.dailyMax}h/day)`]].map(([bg,icon,label])=>(
+            {[["#FFFDF0","🔶",`Approaching OT (≥${Math.round(O.weeklyThreshold*0.85)}h)`],["#FFF5CC","⚠️",`Overtime (>${O.weeklyThreshold}h/week)`],["#FFE0D8","🚨",`Daily max exceeded (>${O.dailyMax}h/day)`]].map(([bg,icon,label])=>(
               <div key={label} style={{display:"flex",alignItems:"center",gap:"6px",fontSize:"11px",color:CN.mid}}>
                 <div style={{width:"13px",height:"13px",borderRadius:"3px",backgroundColor:bg,border:`1px solid ${CN.border}`,flexShrink:0}}/>
                 {icon} {label}
@@ -978,7 +989,7 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
                                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"10px"}}>
                                   <div>
                                     <div style={{fontWeight:600,fontSize:"14px",color:CN.dark,display:"flex",alignItems:"center",gap:"4px"}}>
-                                      {STATUS[st].icon&&<span>{STATUS[st].icon}</span>}{role.name} <span style={{fontSize:"11px",color:CN.mid,fontWeight:400}}>#{empIdx+1}</span>{STATUS[st].label&&st!=="ok"&&<span style={{fontSize:"10px",fontWeight:700,backgroundColor:"#FEE2E2",color:CN.red,padding:"1px 6px",borderRadius:99,marginLeft:4}}>{STATUS[st].label}</span>}
+                                      {STATUS[st].icon&&<span>{STATUS[st].icon}</span>}{role.name} <span style={{fontSize:"11px",color:CN.mid,fontWeight:400}}>#{empIdx+1}</span>{STATUS[st].label&&st!=="ok"&&<span style={{fontSize:"10px",fontWeight:700,backgroundColor:"#FFE0D8",color:CN.red,padding:"1px 6px",borderRadius:99,marginLeft:4}}>{STATUS[st].label}</span>}
                                     </div>
                                     <div style={{fontSize:"11px",color:CN.mid}}>{role.payType==="Hourly"?`${fmt$(role.rate)}/hr`:`${fmt$(role.rate)}/mo ${role.exempt?"(exempt)":"(nonexempt)"}`}</div>
                                   </div>
@@ -991,7 +1002,7 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
                                   <label style={{fontSize:"11px",fontWeight:600,color:CN.mid,textTransform:"uppercase",whiteSpace:"nowrap"}}>Hours {DAY_LABELS[activeDayIdx]}</label>
                                   <input type="number" min={0} max={24} step={0.5} value={h} placeholder="0"
                                     onChange={e=>updateDay(plan.id,activeDay,e.target.value)}
-                                    style={{flex:1,textAlign:"center",border:`1.5px solid ${overDay?CN.red:CN.border}`,borderRadius:"8px",padding:"10px",fontSize:"18px",fontWeight:700,fontFamily:"'DM Sans',sans-serif",backgroundColor:overDay?"#FEE2E2":CN.white,color:overDay?CN.red:CN.dark,outline:"none",boxSizing:"border-box"}}
+                                    style={{flex:1,textAlign:"center",border:`1.5px solid ${overDay?CN.red:CN.border}`,borderRadius:"8px",padding:"10px",fontSize:"18px",fontWeight:700,fontFamily:"'DM Sans',sans-serif",backgroundColor:overDay?"#FFE0D8":CN.white,color:overDay?CN.red:CN.dark,outline:"none",boxSizing:"border-box"}}
                                   />
                                   <button onClick={()=>{if(!readOnly)removeRow(plan.id);}} style={{border:`1px solid ${CN.border}`,background:CN.white,cursor:"pointer",color:CN.mid,fontSize:"13px",padding:"8px 10px",borderRadius:"8px"}}>✕</button>
                                 </div>
@@ -1059,7 +1070,7 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
                                     <div>
                                       <div style={{fontWeight:600,color:CN.dark,fontSize:"12px",display:"flex",alignItems:"center",gap:"4px"}}>
                                         {STATUS[st].icon&&<span>{STATUS[st].icon}</span>}{role.name}
-                                        {role.isMinor&&<span style={{fontSize:"9px",fontWeight:700,backgroundColor:"#FEF3C7",color:"#92400E",padding:"1px 5px",borderRadius:99}}>Minor</span>}
+                                        {role.isMinor&&<span style={{fontSize:"9px",fontWeight:700,backgroundColor:"#FFF5CC",color:"#92400E",padding:"1px 5px",borderRadius:99}}>Minor</span>}
                                       </div>
                                       <div style={{fontSize:"10px",color:CN.mid}}>
                                         #{empIdx+1} · {role.payType==="Hourly"?`${fmt$(role.rate)}/hr`:`${fmt$(role.rate)}/mo`}
@@ -1083,7 +1094,7 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
                                       <input type="number" min={0} max={role.isMinor?Math.max(0,MINOR_WEEKLY_MAX-(otherDaysTotal)):24} step={0.5} value={h} placeholder="–"
                                         title={role.isMinor?`Minor: ${Math.max(0,MINOR_WEEKLY_MAX-otherDaysTotal-hNum).toFixed(1)}h remaining this week`:""}
                                         onChange={e=>updateDay(plan.id,d,e.target.value)}
-                                        style={{width:"100%",textAlign:"center",border:`1.5px solid ${cellRed?CN.red:hNum>0?CN.border:CN.creamDark}`,borderRadius:"6px",padding:"6px 2px",fontSize:"13px",fontFamily:"'DM Sans',sans-serif",backgroundColor:cellRed?"#FEE2E2":hNum>0?CN.white:CN.creamDark,color:cellRed?CN.red:CN.dark,outline:"none",boxSizing:"border-box"}}
+                                        style={{width:"100%",textAlign:"center",border:`1.5px solid ${cellRed?CN.red:hNum>0?CN.border:CN.creamDark}`,borderRadius:"6px",padding:"6px 2px",fontSize:"13px",fontFamily:"'DM Sans',sans-serif",backgroundColor:cellRed?"#FFE0D8":hNum>0?CN.white:CN.creamDark,color:cellRed?CN.red:CN.dark,outline:"none",boxSizing:"border-box"}}
                                       />
                                     </td>
                                   );
@@ -1958,7 +1969,7 @@ export default function App({ currentUser }) {
       )}
 
       {/* Header */}
-      <div style={{background:`linear-gradient(135deg,${CN.orange} 0%,#FF5722 100%)`,padding:isMobile?"10px 14px":"14px 24px",boxShadow:"0 2px 12px rgba(244,58,10,0.25)"}}>
+      <div style={{background:`linear-gradient(135deg,${CN.orange} 0%,#D93200 100%)`,padding:isMobile?"10px 14px":"14px 24px",boxShadow:"0 2px 12px rgba(244,58,10,0.25)"}}>
         <div style={{maxWidth:"1200px",margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
           <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
             <div onClick={()=>document.getElementById("cn-logo-upload").click()} title="Click to upload logo"
