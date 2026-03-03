@@ -2000,6 +2000,16 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
         })
       });
 
+      if (!response.ok) {
+        const errText = await response.text();
+        let errMsg = `Anthropic returned ${response.status}`;
+        try {
+          const errJson = JSON.parse(errText);
+          errMsg = errJson?.error?.message || errJson?.error || errMsg;
+        } catch {}
+        throw new Error(errMsg);
+      }
+
       const data = await response.json();
       const text = data.content?.map(b => b.text || "").join("") || "";
 
