@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 // ── Mobile detection ──────────────────────────────────────────────
 function useIsMobile() {
@@ -114,6 +114,7 @@ const STATUS = {
 
 // ── Storage ───────────────────────────────────────────────────────
 async function loadS(key,fallback) { try{const r=await window.storage.get(key);return r?JSON.parse(r.value):fallback;}catch{return fallback;} }
+async function loadSWithTs(key,fallback) { try{const r=await window.storage.get(key);return r?{value:JSON.parse(r.value),updated_at:r.updated_at||null}:{value:fallback,updated_at:null};}catch{return{value:fallback,updated_at:null};} }
 async function saveS(key,val) { try{await window.storage.set(key,JSON.stringify(val));}catch{} }
 
 // ── Brand primitives ──────────────────────────────────────────────
@@ -181,6 +182,82 @@ function Note({children,type="info"}) {
   const s={info:{bg:CN.creamDark,border:CN.border,text:CN.mid},warning:{bg:CN.amberLight,border:CN.amber,text:"#92400E"},alert:{bg:CN.orangeLight,border:CN.orange,text:CN.orangeHover}};
   const st=s[type];
   return <div style={{backgroundColor:st.bg,border:`1px solid ${st.border}`,borderRadius:"8px",padding:"10px 14px",fontSize:"12px",color:st.text,marginBottom:"12px"}}>{children}</div>;
+}
+
+// ── Conflict Modal ────────────────────────────────────────────────
+function ConflictModal({conflict,onKeepMine,onUseDB,onCancel}) {
+  if(!conflict) return null;
+  const labels={roles:"Job Roles",plans:"Weekly Schedule",settings:"Settings"};
+  const section=labels[conflict.section]||conflict.section;
+  const dbDate=conflict.dbUpdatedAt?new Date(conflict.dbUpdatedAt).toLocaleString():"unknown time";
+  return (
+    <div style={{position:"fixed",inset:0,backgroundColor:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
+      <div style={{backgroundColor:CN.white,borderRadius:"16px",padding:"28px",maxWidth:"420px",width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+        <div style={{fontSize:"32px",marginBottom:"10px"}}>⚠️</div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"20px",color:CN.dark,marginBottom:"8px",textTransform:"uppercase",letterSpacing:"0.05em"}}>
+          Save Conflict — {section}
+        </div>
+        <p style={{fontSize:"13px",color:CN.mid,marginBottom:"20px",lineHeight:1.6}}>
+          Another user saved <strong>{section}</strong> at <strong>{dbDate}</strong>, after you loaded this page. Your changes have not been saved yet.
+        </p>
+        <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+          <button onClick={onKeepMine} style={{padding:"12px 18px",backgroundColor:CN.orange,color:CN.white,border:"none",borderRadius:"10px",fontWeight:700,fontSize:"13px",cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",letterSpacing:"0.06em"}}>
+            Keep my changes — overwrite DB
+          </button>
+          <button onClick={onUseDB} style={{padding:"12px 18px",backgroundColor:CN.creamDark,color:CN.dark,border:"none",borderRadius:"10px",fontWeight:700,fontSize:"13px",cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",letterSpacing:"0.06em"}}>
+            Use DB version — discard my changes
+          </button>
+          <button onClick={onCancel} style={{padding:"8px",backgroundColor:"transparent",color:CN.mid,border:"none",fontSize:"12px",cursor:"pointer"}}>
+            Cancel — keep editing
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Save Bar ──────────────────────────────────────────────────────
+function SaveBar({dirty,onSave,onClear,saving,isMobile}) {
+  const [confirmClear,setConfirmClear]=useState(false);
+  const handleClear=()=>{ if(confirmClear){onClear();setConfirmClear(false);}else setConfirmClear(true); };
+  useEffect(()=>{ if(!dirty) setConfirmClear(false); },[dirty]);
+  const bar={
+    display:"flex",alignItems:"center",justifyContent:"space-between",gap:"8px",
+    ...(isMobile?{
+      position:"fixed",bottom:0,left:0,right:0,zIndex:100,
+      backgroundColor:CN.white,borderTop:`2px solid ${dirty?CN.orange:CN.border}`,
+      padding:"12px 16px",boxShadow:"0 -4px 20px rgba(0,0,0,0.08)",
+    }:{
+      borderTop:`1.5px solid ${dirty?CN.orange:CN.border}`,
+      marginTop:"20px",paddingTop:"16px",transition:"border-color 0.2s",
+    }),
+  };
+  return (
+    <div style={bar}>
+      <div style={{display:"flex",alignItems:"center",gap:"6px",fontSize:"12px",color:dirty?CN.orange:CN.mid,fontWeight:dirty?600:400}}>
+        {dirty&&<span style={{width:"7px",height:"7px",borderRadius:"50%",backgroundColor:CN.orange,display:"inline-block",flexShrink:0}}/>}
+        <span>{dirty?"Unsaved changes":"All saved"}</span>
+      </div>
+      <div style={{display:"flex",gap:"8px"}}>
+        <button onClick={handleClear}
+          style={{padding:"7px 14px",border:`1.5px solid ${confirmClear?CN.red:CN.border}`,borderRadius:"8px",
+            backgroundColor:confirmClear?"#FEE2E2":CN.white,color:confirmClear?CN.red:CN.mid,
+            fontSize:"12px",fontWeight:700,cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",
+            textTransform:"uppercase",letterSpacing:"0.06em",transition:"all 0.15s"}}>
+          {confirmClear?"Confirm clear":"Clear"}
+        </button>
+        <button onClick={onSave} disabled={!dirty||saving}
+          style={{padding:"7px 18px",border:"none",borderRadius:"8px",
+            backgroundColor:dirty&&!saving?CN.orange:CN.creamDark,
+            color:dirty&&!saving?CN.white:CN.mid,
+            fontSize:"12px",fontWeight:700,cursor:dirty&&!saving?"pointer":"default",
+            fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",letterSpacing:"0.06em",
+            transition:"all 0.15s",minWidth:"70px"}}>
+          {saving?"Saving…":"Save"}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 // th / td base
@@ -253,7 +330,7 @@ function RoleForm({initial,onSave,onCancel,tax,ot}) {
 }
 
 // ── Roles Tab ─────────────────────────────────────────────────────
-function RolesTab({roles,setRoles,tax,ot}) {
+function RolesTab({roles,setRoles,tax,ot,dirty,onSave,onClear,saving,isMobile}) {
   const [adding,setAdding]=useState(false);
   const [editing,setEditing]=useState(null);
   const save=(role)=>{setRoles(rs=>rs.find(r=>r.id===role.id)?rs.map(r=>r.id===role.id?role:r):[...rs,role]);setAdding(false);setEditing(null);};
@@ -312,15 +389,16 @@ function RolesTab({roles,setRoles,tax,ot}) {
           <p style={{fontSize:"13px"}}>No roles yet. Add your first role to get started.</p>
         </div>
       )}
+      <SaveBar dirty={dirty} onSave={onSave} onClear={onClear} saving={saving} isMobile={isMobile}/>
+      {isMobile&&<div style={{height:70}}/>}
     </div>
   );
 }
 
 // ── Plan Tab — Day-by-day scheduling grid ─────────────────────────
-function PlanTab({roles,plans,setPlans,tax,ot}) {
+function PlanTab({roles,plans,setPlans,tax,ot,dirty,onSave,onClear,saving,isMobile}) {
   const [selectedWeek,setSelectedWeek]=useState(isoMonday(toMonday(new Date())));
   const [activeDayIdx,setActiveDayIdx]=useState(()=>{ const d=new Date().getDay(); return d===0?6:d-1; });
-  const isMobile=useIsMobile();
   const active=roles.filter(r=>r.active);
   const weekPlans=plans.filter(p=>p.weekOf===selectedWeek);
   const O=ot||DEFAULT_OT;
@@ -645,12 +723,14 @@ function PlanTab({roles,plans,setPlans,tax,ot}) {
           <p style={{fontSize:"13px"}}>No employees scheduled this week. Use the <strong>+ Add [Role]</strong> buttons within each category to add rows.</p>
         </div>
       )}
+      <SaveBar dirty={dirty} onSave={onSave} onClear={()=>onClear(selectedWeek)} saving={saving} isMobile={isMobile}/>
+      {isMobile&&<div style={{height:70}}/>}
     </div>
   );
 }
 
 // ── Summary Tab ───────────────────────────────────────────────────
-function SummaryTab({roles,plans,tax,ot}) {
+function SummaryTab({roles,plans,tax,ot,onRefresh}) {
   const isMobile=useIsMobile();
   const weeks=[...new Set(plans.map(p=>p.weekOf))].sort().slice(-8);
 
@@ -697,7 +777,10 @@ function SummaryTab({roles,plans,tax,ot}) {
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"20px"}}>
         <SHead title="Labor Cost Summary" sub={`Last ${weeks.length} planned weeks · All-in employer cost`}/>
-        <Btn onClick={exportCSV}>Export CSV</Btn>
+        <div style={{display:"flex",gap:"8px"}}>
+          <Btn variant="secondary" onClick={onRefresh}>↻ Refresh</Btn>
+          <Btn onClick={exportCSV}>Export CSV</Btn>
+        </div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:"12px",marginBottom:"20px"}}>
         {[["Avg Weekly Total",fmt$(avg("total")),CN.orange],["Avg Total Hours",avg("totalHrs").toFixed(1)+"h",CN.dark],["Avg OT Hours",avg("otHrs")>0?avg("otHrs").toFixed(1)+"h ⚡":"0h",avg("otHrs")>0?CN.amberDark:CN.mid]].map(([l,v,c])=>(
@@ -752,13 +835,7 @@ function SummaryTab({roles,plans,tax,ot}) {
 }
 
 // ── Settings Tab ──────────────────────────────────────────────────
-function SettingsTab({tax,setTax,ot,setOt}) {
-  const [t,setT]=useState({...tax});
-  const [o,setO]=useState({...ot});
-  const [saved,setSaved]=useState(false);
-  const isMobile=useIsMobile();
-  const apply=()=>{setTax(t);setOt(o);setSaved(true);setTimeout(()=>setSaved(false),2000);};
-
+function SettingsTab({tax,setTax,ot,setOt,dirty,onSave,onClear,saving,isMobile}) {
   return (
     <div>
       <SHead title="Settings" sub="Payroll tax rates and overtime rules. Verify every January — WA rates change annually."/>
@@ -769,20 +846,20 @@ function SettingsTab({tax,setTax,ot,setOt}) {
       <Card>
         <Sub>Federal Taxes — Employer Portion</Sub>
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:"0 20px"}}>
-          <Field label="Social Security (%)" type="number" value={t.federalSS} step={0.01} onChange={v=>setT(p=>({...p,federalSS:v}))} note={`6.2% on first $${(t.ssWageBase||176100).toLocaleString()}/yr. IRS Pub 15.`}/>
-          <Field label="Medicare (%)" type="number" value={t.federalMedicare} step={0.01} onChange={v=>setT(p=>({...p,federalMedicare:v}))} note="1.45% on all wages, no cap. IRS Pub 15."/>
-          <Field label="FUTA (%)" type="number" value={t.futa} step={0.01} onChange={v=>setT(p=>({...p,futa:v}))} note="Net after WA SUTA credit = 0.6%. First $7,000/employee/yr."/>
+          <Field label="Social Security (%)" type="number" value={tax.federalSS} step={0.01} onChange={v=>setTax(p=>({...p,federalSS:v}))} note={`6.2% on first $${(tax.ssWageBase||176100).toLocaleString()}/yr. IRS Pub 15.`}/>
+          <Field label="Medicare (%)" type="number" value={tax.federalMedicare} step={0.01} onChange={v=>setTax(p=>({...p,federalMedicare:v}))} note="1.45% on all wages, no cap. IRS Pub 15."/>
+          <Field label="FUTA (%)" type="number" value={tax.futa} step={0.01} onChange={v=>setTax(p=>({...p,futa:v}))} note="Net after WA SUTA credit = 0.6%. First $7,000/employee/yr."/>
         </div>
       </Card>
       <Card>
         <Sub>Washington State — Employer Portion</Sub>
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:"0 20px"}}>
-          <Field label="WA SUI (%)" type="number" value={t.waSUI} step={0.01} onChange={v=>setT(p=>({...p,waSUI:v}))} note={`On first $${(t.suiWageBase||72800).toLocaleString()}/yr per employee. New employer rate ~1.2%. Your experience rate: esd.wa.gov.`}/>
-          <Field label="WA L&I ($/hr worked)" type="number" value={t.waLnI} step={0.01} onChange={v=>setT(p=>({...p,waLnI:v}))} note="Per hour worked. Restaurant risk class ~6901: approx $1.50–$2.50/hr. Verify at lni.wa.gov."/>
-          <Field label="WA PFML Employer (%)" type="number" value={t.waPFML} step={0.01} onChange={v=>setT(p=>({...p,waPFML:v}))} note="0% for employers under 50 employees. See paidleave.wa.gov."/>
-          <Field label="WA Minimum Wage ($/hr)" type="number" value={t.minWage} step={0.01} onChange={v=>setT(p=>({...p,minWage:v}))} note="$16.66/hr statewide Jan 1, 2025. Seattle large employer: $20.76. Source: lni.wa.gov."/>
+          <Field label="WA SUI (%)" type="number" value={tax.waSUI} step={0.01} onChange={v=>setTax(p=>({...p,waSUI:v}))} note={`On first $${(tax.suiWageBase||72800).toLocaleString()}/yr per employee. New employer rate ~1.2%. Your experience rate: esd.wa.gov.`}/>
+          <Field label="WA L&I ($/hr worked)" type="number" value={tax.waLnI} step={0.01} onChange={v=>setTax(p=>({...p,waLnI:v}))} note="Per hour worked. Restaurant risk class ~6901: approx $1.50–$2.50/hr. Verify at lni.wa.gov."/>
+          <Field label="WA PFML Employer (%)" type="number" value={tax.waPFML} step={0.01} onChange={v=>setTax(p=>({...p,waPFML:v}))} note="0% for employers under 50 employees. See paidleave.wa.gov."/>
+          <Field label="WA Minimum Wage ($/hr)" type="number" value={tax.minWage} step={0.01} onChange={v=>setTax(p=>({...p,minWage:v}))} note="$16.66/hr statewide Jan 1, 2025. Seattle large employer: $20.76. Source: lni.wa.gov."/>
         </div>
-        <Field label="Rates effective date" value={t.effectiveDate||""} onChange={v=>setT(p=>({...p,effectiveDate:v}))} style={{maxWidth:"220px"}} note="Update this when you revise rates so you know when they were last checked."/>
+        <Field label="Rates effective date" value={tax.effectiveDate||""} onChange={v=>setTax(p=>({...p,effectiveDate:v}))} style={{maxWidth:"220px"}} note="Update this when you revise rates so you know when they were last checked."/>
       </Card>
       <Card>
         <Sub>Overtime Rules</Sub>
@@ -791,12 +868,13 @@ function SettingsTab({tax,setTax,ot,setOt}) {
           WA has <strong>no daily OT</strong> requirement for adults (unlike CA). The daily max below is a <em>soft planning limit</em> — rows exceeding it show a 🚨 warning but no additional cost is calculated.
         </Note>
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:"0 20px",maxWidth:isMobile?"100%":"500px"}}>
-          <Field label="Weekly OT Threshold (hrs)" type="number" value={o.weeklyThreshold} step={1} min={1} onChange={v=>setO(p=>({...p,weeklyThreshold:v}))}/>
-          <Field label="OT Multiplier" type="number" value={o.multiplier} step={0.1} min={1} onChange={v=>setO(p=>({...p,multiplier:v}))}/>
-          <Field label="Daily Max (soft limit, hrs)" type="number" value={o.dailyMax} step={0.5} min={0} onChange={v=>setO(p=>({...p,dailyMax:v}))} note="Set 0 to disable."/>
+          <Field label="Weekly OT Threshold (hrs)" type="number" value={ot.weeklyThreshold} step={1} min={1} onChange={v=>setOt(p=>({...p,weeklyThreshold:v}))}/>
+          <Field label="OT Multiplier" type="number" value={ot.multiplier} step={0.1} min={1} onChange={v=>setOt(p=>({...p,multiplier:v}))}/>
+          <Field label="Daily Max (soft limit, hrs)" type="number" value={ot.dailyMax} step={0.5} min={0} onChange={v=>setOt(p=>({...p,dailyMax:v}))} note="Set 0 to disable."/>
         </div>
       </Card>
-      <Btn onClick={apply}>{saved?"✓ Settings Saved":"Save Settings"}</Btn>
+      <SaveBar dirty={dirty} onSave={onSave} onClear={onClear} saving={saving} isMobile={isMobile}/>
+      {isMobile&&<div style={{height:70}}/>}
     </div>
   );
 }
@@ -804,14 +882,25 @@ function SettingsTab({tax,setTax,ot,setOt}) {
 // ── App Shell ─────────────────────────────────────────────────────
 export default function App() {
   const [tab,setTab]=useState("plan");
+  // Working drafts
   const [roles,setRoles]=useState(null);
   const [plans,setPlans]=useState(null);
   const [tax,setTax]=useState(null);
   const [ot,setOt]=useState(null);
+  // Last-committed snapshots (for dirty check + clear)
+  const [savedRoles,setSavedRoles]=useState(null);
+  const [savedPlans,setSavedPlans]=useState(null);
+  const [savedTax,setSavedTax]=useState(null);
+  const [savedOt,setSavedOt]=useState(null);
+  // DB timestamps per key — used for conflict detection
+  const lastKnownAt=useRef({});
+  // UI state
   const [loading,setLoading]=useState(true);
   const [logoUrl,setLogoUrl]=useState(null);
   const [tabIcons,setTabIcons]=useState(DEFAULT_TAB_ICONS);
   const [showSystemTools,setShowSystemTools]=useState(false);
+  const [saving,setSaving]=useState({roles:false,plans:false,settings:false});
+  const [conflict,setConflict]=useState(null);
   const isMobile=useIsMobile();
 
   useEffect(()=>{
@@ -822,26 +911,85 @@ export default function App() {
     document.body.style.margin="0";document.body.style.padding="0";document.body.style.backgroundColor=CN.cream;
   },[]);
 
-  useEffect(()=>{
-    (async()=>{
-      setRoles(await loadS(SK.roles,null)||DEFAULT_ROLES.map(r=>({...r,benefits:{...DEFAULT_BENEFITS,...(r.benefits||{})}})));
-      setPlans(await loadS(SK.plans,[]));
-      setTax(await loadS(SK.tax,DEFAULT_TAX));
-      setOt(await loadS(SK.ot,DEFAULT_OT));
-      const savedIcons=await loadS(SK.icons,DEFAULT_TAB_ICONS);
-      setTabIcons({...DEFAULT_TAB_ICONS,...savedIcons});
-      const savedLogo=await loadS(SK.logo,null);
-      if(savedLogo) setLogoUrl(savedLogo);
-      setLoading(false);
-    })();
+  const loadAll=useCallback(async(showLoader=true)=>{
+    if(showLoader) setLoading(true);
+    const r=await loadSWithTs(SK.roles,null);
+    const rv=r.value||DEFAULT_ROLES.map(r=>({...r,benefits:{...DEFAULT_BENEFITS,...(r.benefits||{})}}));
+    setRoles(rv); setSavedRoles(JSON.parse(JSON.stringify(rv))); lastKnownAt.current[SK.roles]=r.updated_at;
+
+    const p=await loadSWithTs(SK.plans,[]);
+    setPlans(p.value); setSavedPlans(JSON.parse(JSON.stringify(p.value))); lastKnownAt.current[SK.plans]=p.updated_at;
+
+    const t=await loadSWithTs(SK.tax,DEFAULT_TAX);
+    setTax(t.value); setSavedTax(JSON.parse(JSON.stringify(t.value))); lastKnownAt.current[SK.tax]=t.updated_at;
+
+    const o=await loadSWithTs(SK.ot,DEFAULT_OT);
+    setOt(o.value); setSavedOt(JSON.parse(JSON.stringify(o.value))); lastKnownAt.current[SK.ot]=o.updated_at;
+
+    const si=await loadS(SK.icons,DEFAULT_TAB_ICONS);
+    setTabIcons({...DEFAULT_TAB_ICONS,...si});
+    const sl=await loadS(SK.logo,null);
+    if(sl) setLogoUrl(sl);
+    if(showLoader) setLoading(false);
   },[]);
 
-  useEffect(()=>{if(roles)saveS(SK.roles,roles);},[roles]);
-  useEffect(()=>{if(plans)saveS(SK.plans,plans);},[plans]);
-  useEffect(()=>{if(tax)saveS(SK.tax,tax);},[tax]);
-  useEffect(()=>{if(ot)saveS(SK.ot,ot);},[ot]);
+  useEffect(()=>{ loadAll(); },[loadAll]);
+
+  // Auto-save UI prefs only (not critical data)
   useEffect(()=>{saveS(SK.icons,tabIcons);},[tabIcons]);
-  useEffect(()=>{if(logoUrl)saveS(SK.logo,logoUrl);},[logoUrl]);
+  useEffect(()=>{if(logoUrl!==null)saveS(SK.logo,logoUrl);},[logoUrl]);
+
+  // ── Save with conflict detection ────────────────────────────────
+  const doSave=useCallback(async(section,keys)=>{
+    setSaving(s=>({...s,[section]:true}));
+    const committed=[];
+    for(const item of keys){
+      const result=await window.storage.checkAndSet(item.key,JSON.stringify(item.val),lastKnownAt.current[item.key]);
+      if(!result){ setSaving(s=>({...s,[section]:false})); return; }
+      if(result.conflict){
+        const dbRaw=await window.storage.get(item.key);
+        setConflict({section,keys,conflictKey:item.key,dbValue:dbRaw?JSON.parse(dbRaw.value):null,dbUpdatedAt:result.dbUpdatedAt});
+        setSaving(s=>({...s,[section]:false})); return;
+      }
+      committed.push({...item,newTs:result.updated_at});
+    }
+    // All clear — persist snapshots
+    for(const item of committed){ item.setSaved(JSON.parse(JSON.stringify(item.val))); lastKnownAt.current[item.key]=item.newTs; }
+    setSaving(s=>({...s,[section]:false}));
+  },[]);
+
+  const saveRoles=()=>doSave("roles",[{key:SK.roles,val:roles,setSaved:setSavedRoles}]);
+  const savePlans=()=>doSave("plans",[{key:SK.plans,val:plans,setSaved:setSavedPlans}]);
+  const saveSettings=()=>doSave("settings",[
+    {key:SK.tax,val:tax,setSaved:setSavedTax},
+    {key:SK.ot,val:ot,setSaved:setSavedOt},
+  ]);
+
+  // Clear: revert draft to last snapshot
+  const clearRoles=()=>setRoles(JSON.parse(JSON.stringify(savedRoles)));
+  const clearPlansWeek=(weekOf)=>setPlans(ps=>[...ps.filter(p=>p.weekOf!==weekOf),...savedPlans.filter(p=>p.weekOf===weekOf)]);
+  const clearSettings=()=>{ setTax(JSON.parse(JSON.stringify(savedTax))); setOt(JSON.parse(JSON.stringify(savedOt))); };
+
+  // Dirty flags
+  const rolesDirty=!!savedRoles&&JSON.stringify(roles)!==JSON.stringify(savedRoles);
+  const plansDirty=!!savedPlans&&JSON.stringify(plans)!==JSON.stringify(savedPlans);
+  const settingsDirty=!!savedTax&&(JSON.stringify(tax)!==JSON.stringify(savedTax)||JSON.stringify(ot)!==JSON.stringify(savedOt));
+
+  // Conflict resolution
+  const resolveConflict=async(keepMine)=>{
+    if(keepMine&&conflict){
+      // Force save — skip conflict check
+      await Promise.all(conflict.keys.map(item=>
+        window.storage.set(item.key,JSON.stringify(item.val)).then(result=>{
+          if(result){ item.setSaved(JSON.parse(JSON.stringify(item.val))); lastKnownAt.current[item.key]=new Date().toISOString(); }
+        })
+      ));
+    } else {
+      // Reload everything from DB
+      await loadAll(false);
+    }
+    setConflict(null);
+  };
 
   const TABS=[
     {id:"roles",label:"Job Roles",icon:tabIcons.roles},
@@ -858,6 +1006,7 @@ export default function App() {
 
   return (
     <div style={{minHeight:"100vh",backgroundColor:CN.cream,fontFamily:"'DM Sans',sans-serif"}}>
+      <ConflictModal conflict={conflict} onKeepMine={()=>resolveConflict(true)} onUseDB={()=>resolveConflict(false)} onCancel={()=>setConflict(null)}/>
       <div style={{background:`linear-gradient(135deg,${CN.orange} 0%,#FF5722 100%)`,padding:isMobile?"10px 14px":"14px 24px",boxShadow:"0 2px 12px rgba(244,58,10,0.25)"}}>
         <div style={{maxWidth:"1100px",margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
 
@@ -903,20 +1052,15 @@ export default function App() {
               <button
                 onClick={()=>setShowSystemTools(v=>!v)}
                 style={{background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.38)",borderRadius:8,padding:"7px 13px",color:CN.white,cursor:"pointer",fontSize:"13px",fontWeight:600,fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}
-              >🛠️ System Tools</button>
+              >🛠️ {!isMobile&&"System Tools"}</button>
 
               {showSystemTools && (
                 <>
-                  {/* Click-outside overlay */}
                   <div style={{position:"fixed",inset:0,zIndex:999}} onClick={()=>setShowSystemTools(false)}/>
-
-                  {/* Dropdown panel */}
                   <div style={{position:"absolute",top:"calc(100% + 8px)",right:0,width:310,backgroundColor:CN.white,borderRadius:12,boxShadow:"0 8px 32px rgba(0,0,0,0.18)",border:`1px solid ${CN.border}`,zIndex:1000,overflow:"hidden"}}>
                     <div style={{padding:"11px 16px",backgroundColor:CN.creamDark,borderBottom:`1px solid ${CN.border}`,fontWeight:700,fontSize:"13px",color:CN.dark,fontFamily:"'DM Sans',sans-serif"}}>
                       🛠️ System Tools
                     </div>
-
-                    {/* Logo section */}
                     <div style={{padding:"14px 16px",borderBottom:`1px solid ${CN.border}`}}>
                       <div style={{fontSize:"11px",fontWeight:600,color:CN.mid,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.05em"}}>Logo</div>
                       <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -927,35 +1071,29 @@ export default function App() {
                           }
                         </div>
                         <div style={{flex:1,minWidth:0}}>
-                          <button
-                            onClick={()=>document.getElementById("cn-logo-upload").click()}
+                          <button onClick={()=>document.getElementById("cn-logo-upload").click()}
                             style={{fontSize:"12px",padding:"5px 10px",borderRadius:6,border:`1px solid ${CN.border}`,backgroundColor:CN.white,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",color:CN.dark,display:"block",width:"100%",marginBottom:4}}
                           >{logoUrl?"Replace logo":"Upload logo"}</button>
-                          {logoUrl && (
-                            <button
-                              onClick={()=>setLogoUrl(null)}
+                          {logoUrl&&(
+                            <button onClick={()=>setLogoUrl(null)}
                               style={{fontSize:"11px",padding:"4px 10px",borderRadius:6,border:`1px solid ${CN.border}`,backgroundColor:CN.white,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",color:CN.red,display:"block",width:"100%"}}
                             >Remove logo</button>
                           )}
                         </div>
                       </div>
                     </div>
-
-                    {/* Navigation Icons section */}
                     <div style={{padding:"14px 16px"}}>
                       <div style={{fontSize:"11px",fontWeight:600,color:CN.mid,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.05em"}}>Navigation Icons</div>
                       {[
-                        {id:"roles",   label:"Job Roles",       options:["👥","👤","🧑‍💼","👷","🧑‍🍳","🤝","🏢","🎭"]},
-                        {id:"plan",    label:"Weekly Schedule",  options:["📋","📅","🗓️","📆","🗒️","📝","⏰","🗂️"]},
-                        {id:"summary", label:"Summary",          options:["📊","📈","📉","💼","🧾","📄","💰","🔍"]},
+                        {id:"roles",   label:"Job Roles",      options:["👥","👤","🧑‍💼","👷","🧑‍🍳","🤝","🏢","🎭"]},
+                        {id:"plan",    label:"Weekly Schedule", options:["📋","📅","🗓️","📆","🗒️","📝","⏰","🗂️"]},
+                        {id:"summary", label:"Summary",         options:["📊","📈","📉","💼","🧾","📄","💰","🔍"]},
                       ].map(row=>(
                         <div key={row.id} style={{marginBottom:12}}>
                           <div style={{fontSize:"12px",color:CN.dark,marginBottom:6,fontWeight:500,fontFamily:"'DM Sans',sans-serif"}}>{row.label}</div>
                           <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
                             {row.options.map(icon=>(
-                              <button
-                                key={icon}
-                                onClick={()=>setTabIcons(prev=>({...prev,[row.id]:icon}))}
+                              <button key={icon} onClick={()=>setTabIcons(prev=>({...prev,[row.id]:icon}))}
                                 style={{fontSize:"17px",padding:"4px 7px",borderRadius:6,border:tabIcons[row.id]===icon?`2px solid ${CN.orange}`:"2px solid transparent",backgroundColor:tabIcons[row.id]===icon?CN.orangeLight:"transparent",cursor:"pointer",lineHeight:1.3}}
                               >{icon}</button>
                             ))}
@@ -976,15 +1114,18 @@ export default function App() {
           {TABS.map(t=>(
             <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:isMobile?"10px 14px":"12px 22px",fontSize:isMobile?"12px":"13px",fontWeight:600,border:"none",cursor:"pointer",borderBottom:tab===t.id?`3px solid ${CN.orange}`:"3px solid transparent",color:tab===t.id?CN.orange:CN.mid,backgroundColor:"transparent",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap",flexShrink:0}}>
               {t.icon} {t.label}
+              {t.id==="roles"&&rolesDirty&&<span style={{width:"6px",height:"6px",borderRadius:"50%",backgroundColor:CN.orange,display:"inline-block",marginLeft:5,verticalAlign:"middle"}}/>}
+              {t.id==="plan"&&plansDirty&&<span style={{width:"6px",height:"6px",borderRadius:"50%",backgroundColor:CN.orange,display:"inline-block",marginLeft:5,verticalAlign:"middle"}}/>}
+              {t.id==="settings"&&settingsDirty&&<span style={{width:"6px",height:"6px",borderRadius:"50%",backgroundColor:CN.orange,display:"inline-block",marginLeft:5,verticalAlign:"middle"}}/>}
             </button>
           ))}
         </div>
       </div>
       <div style={{maxWidth:"1100px",margin:"0 auto",padding:isMobile?"16px 12px":"28px 24px"}}>
-        {tab==="roles"    &&<RolesTab    roles={roles}  setRoles={setRoles}  tax={tax} ot={ot}/>}
-        {tab==="plan"     &&<PlanTab     roles={roles}  plans={plans}  setPlans={setPlans} tax={tax} ot={ot}/>}
-        {tab==="summary"  &&<SummaryTab  roles={roles}  plans={plans}  tax={tax} ot={ot}/>}
-        {tab==="settings" &&<SettingsTab tax={tax} setTax={setTax} ot={ot} setOt={setOt}/>}
+        {tab==="roles"    &&<RolesTab    roles={roles} setRoles={setRoles} tax={tax} ot={ot} dirty={rolesDirty} onSave={saveRoles} onClear={clearRoles} saving={saving.roles} isMobile={isMobile}/>}
+        {tab==="plan"     &&<PlanTab     roles={roles} plans={plans} setPlans={setPlans} tax={tax} ot={ot} dirty={plansDirty} onSave={savePlans} onClear={clearPlansWeek} saving={saving.plans} isMobile={isMobile}/>}
+        {tab==="summary"  &&<SummaryTab  roles={roles} plans={plans} tax={tax} ot={ot} onRefresh={()=>loadAll(false)}/>}
+        {tab==="settings" &&<SettingsTab tax={tax} setTax={setTax} ot={ot} setOt={setOt} dirty={settingsDirty} onSave={saveSettings} onClear={clearSettings} saving={saving.settings} isMobile={isMobile}/>}
       </div>
     </div>
   );
