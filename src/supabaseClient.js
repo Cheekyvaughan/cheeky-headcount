@@ -7,20 +7,32 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   throw new Error('Missing Supabase env vars — check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env')
 }
 
-// Create a base client — token is injected per-request via getSupabaseClient()
-const _base = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false },
-})
+// Single cached client — re-created only when the token changes.
+// This prevents the "multiple GoTrueClient instances" warning that fires when
+// createClient() is called on every storage operation.
+let _cachedToken = null
+let _cachedClient = null
 
-// Call this with the current Clerk session token before any DB operation.
-// Returns a Supabase client that sends the JWT in the Authorization header.
-// Supabase validates this against Clerk's public key — anon key alone is not enough.
 export function getSupabaseClient(clerkToken) {
-  if (!clerkToken) return _base
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: {
-      headers: { Authorization: `Bearer ${clerkToken}` },
-    },
-  })
+  if (!clerkToken) {
+    // Unauthenticated base client (should not reach DB due to RLS)
+    if (!_cachedClient) {
+      _cachedClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      })
+    }
+    return _cachedClient
+  }
+
+  if (clerkToken !== _cachedToken) {
+    _cachedToken = clerkToken
+    _cachedClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: {
+        headers: { Authorization: `Bearer ${clerkToken}` },
+      },
+    })
+  }
+
+  return _cachedClient
 }

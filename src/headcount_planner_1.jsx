@@ -1510,14 +1510,18 @@ export default function App({ currentUser }) {
 
     // Role scenarios (per-user)
     const rsData = await loadSWithTs(SK.roleScenarios, null);
+    const psData = await loadSWithTs(SK.planScenarios, null);
+
+    // Run migration once for both if either is missing (avoids double storage reads)
+    let migrated = null;
+    const getMigrated = async () => { if (!migrated) migrated = await migrate(); return migrated; };
+
     let rs = rsData.value;
-    if (!rs) { const m = await migrate(); rs = m.rs; }
+    if (!rs) { rs = (await getMigrated()).rs; }
     setRoleScenarios(rs); setSavedRS(deepClone(rs)); lastKnownAt.current[SK.roleScenarios] = rsData.updated_at;
 
-    // Plan scenarios (per-user)
-    const psData = await loadSWithTs(SK.planScenarios, null);
     let ps = psData.value;
-    if (!ps) { const m = await migrate(); ps = m.ps; }
+    if (!ps) { ps = (await getMigrated()).ps; }
     setPlanScenarios(ps); setSavedPS(deepClone(ps)); lastKnownAt.current[SK.planScenarios] = psData.updated_at;
 
     // Tax/OT (shared)

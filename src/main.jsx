@@ -26,8 +26,11 @@ function StorageInit() {
   const [storageReady, setStorageReady] = useState(false)
 
   useEffect(() => {
-    if (isSignedIn) {
+    if (isSignedIn && !window.__storageReady) {
+      window.__storageReady = true
       initStorage(getToken)
+      setStorageReady(true)
+    } else if (isSignedIn && window.__storageReady) {
       setStorageReady(true)
     }
   }, [isSignedIn, getToken])
