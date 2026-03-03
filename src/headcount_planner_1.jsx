@@ -1643,6 +1643,8 @@ export default function App({ currentUser }) {
   const [allUsers,setAllUsers]=useState([]);   // user registry
   const isAdmin = admins.includes(currentUser.id);
   const noAdminsYet = admins.length === 0;
+  const [actingAsUser, setActingAsUser] = useState(false);
+  const effectiveAdmin = isAdmin && !actingAsUser;
   // DB timestamps
   const lastKnownAt=useRef({});
   // UI
@@ -1822,11 +1824,11 @@ export default function App({ currentUser }) {
   const settingsDirty = !!savedTaxYears && (JSON.stringify(taxYears) !== JSON.stringify(savedTaxYears) || JSON.stringify(ot) !== JSON.stringify(savedOt));
 
   const TABS = [
-    { id: "roles",   label: "Job Roles",      icon: tabIcons.roles,   dirty: rolesDirty },
-    { id: "plan",    label: "Schedule",        icon: tabIcons.plan,    dirty: plansDirty },
-    { id: "summary", label: "Summary",         icon: tabIcons.summary, dirty: false },
-    { id: "settings",label: "Taxes & Regs",   icon: "⚖️",             dirty: settingsDirty },
-    ...(isAdmin ? [{ id: "admin", label: "Admin", icon: "🔐", dirty: false }] : []),
+    { id: "roles",    label: "Job Roles",    icon: tabIcons.roles,   dirty: rolesDirty },
+    { id: "plan",     label: "Schedule",     icon: tabIcons.plan,    dirty: plansDirty },
+    { id: "summary",  label: "Summary",      icon: tabIcons.summary, dirty: false },
+    { id: "settings", label: "Taxes & Regs", icon: "⚖️",             dirty: settingsDirty },
+    ...(effectiveAdmin ? [{ id: "admin", label: "Admin", icon: "🔐", dirty: false }] : []),
   ];
 
   if (loading) return (
@@ -1870,6 +1872,15 @@ export default function App({ currentUser }) {
               <div>{roleScenarios?.scenarios.length||0} role scenario{roleScenarios?.scenarios.length!==1?"s":""}</div>
               <div>{planScenarios?.scenarios.length||0} schedule scenario{planScenarios?.scenarios.length!==1?"s":""}</div>
             </div>}
+
+            {/* Admin / User view toggle — only shown to real admins */}
+            {isAdmin&&(
+              <button onClick={()=>{setActingAsUser(v=>!v);if(tab==="admin")setTab("plan");}}
+                title={effectiveAdmin?"Switch to User view":"Switch to Admin view"}
+                style={{background:effectiveAdmin?"rgba(124,58,237,0.25)":"rgba(255,255,255,0.15)",border:`1px solid ${effectiveAdmin?"rgba(167,139,250,0.6)":"rgba(255,255,255,0.3)"}`,borderRadius:8,padding:"6px 12px",color:CN.white,cursor:"pointer",fontSize:"12px",fontWeight:700,fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>
+                {effectiveAdmin?"🔐 Admin":"👤 User"}
+              </button>
+            )}
 
             <div style={{position:"relative"}}>
               <button onClick={()=>setShowSystemTools(v=>!v)}
@@ -1939,12 +1950,12 @@ export default function App({ currentUser }) {
       <div style={{maxWidth:"1200px",margin:"0 auto",padding:isMobile?"16px 12px":"28px 24px"}}>
         {tab==="roles"&&roleScenarios&&<RolesTab
           roleScenarios={roleScenarios} setRoleScenarios={setRoleScenarios}
-          taxYears={taxYears} ot={ot} isAdmin={isAdmin}
+          taxYears={taxYears} ot={ot} isAdmin={effectiveAdmin}
           dirty={rolesDirty} onSave={saveRoles} onClear={clearRoles} saving={saving.roles} isMobile={isMobile}
         />}
         {tab==="plan"&&planScenarios&&roleScenarios&&<PlanTab
           roleScenarios={roleScenarios} planScenarios={planScenarios} setPlanScenarios={setPlanScenarios}
-          taxYears={taxYears} ot={ot} isAdmin={isAdmin}
+          taxYears={taxYears} ot={ot} isAdmin={effectiveAdmin}
           dirty={plansDirty} onSave={savePlans} onClear={clearPlansWeek} saving={saving.plans} isMobile={isMobile}
         />}
         {tab==="summary"&&<SummaryTab
@@ -1957,7 +1968,7 @@ export default function App({ currentUser }) {
           ot={ot} setOt={setOt}
           dirty={settingsDirty} onSave={saveSettings} onClear={clearSettings} saving={saving.settings} isMobile={isMobile}
         />}
-        {tab==="admin"&&isAdmin&&<AdminTab
+        {tab==="admin"&&effectiveAdmin&&<AdminTab
           currentUser={currentUser}
           allUsers={allUsers}
           admins={admins}
