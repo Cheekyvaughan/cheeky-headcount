@@ -292,7 +292,7 @@ function SaveBar({dirty,onSave,onClear,saving,isMobile}) {
 }
 
 // ── Scenario Selector ─────────────────────────────────────────────
-function ScenarioSelector({ scenarios, activeId, onSwitch, onCreate, onDelete, onRename, label="Scenario" }) {
+function ScenarioSelector({ scenarios, activeId, onSwitch, onCreate, onDelete, onRename, canRename, label="Scenario" }) {
   const [open, setOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -343,7 +343,7 @@ function ScenarioSelector({ scenarios, activeId, onSwitch, onCreate, onDelete, o
                     </button>
                 }
                 <div style={{display:"flex",gap:3,flexShrink:0}}>
-                  {renamingId!==s.id&&onRename&&(
+                  {renamingId!==s.id&&onRename&&(!canRename||canRename(s.id))&&(
                     <button onClick={e=>{e.stopPropagation();startRename(s);}}
                       style={{fontSize:"11px",color:CN.mid,background:"none",border:"none",cursor:"pointer",padding:"2px 4px",borderRadius:4}}
                       title="Rename">✏️</button>
@@ -632,7 +632,8 @@ function RolesTab({roleScenarios,setRoleScenarios,taxYears,ot,dirty,onSave,onCle
           onSwitch={id=>setRoleScenarios(prev=>({...prev,activeId:id}))}
           onCreate={handleCreateScenario}
           onDelete={handleDeleteScenario}
-          onRename={(id,name)=>setRoleScenarios(prev=>({...prev,scenarios:prev.scenarios.map(s=>s.id===id?{...s,name}:s)}))}
+          onRename={(id,name)=>setRoleScenarios(prev=>{const target=prev.scenarios.find(s=>s.id===id);if(target?.isDefault&&!isAdmin)return prev;return{...prev,scenarios:prev.scenarios.map(s=>s.id===id?{...s,name}:s)};})}
+          canRename={id=>{const s=roleScenarios.scenarios.find(x=>x.id===id);return !s?.isDefault||isAdmin;}}
           label="Role Scenario"
         />
       </div>
@@ -855,7 +856,8 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
             onSwitch={id=>setPlanScenarios(prev=>({...prev,activeId:id}))}
             onCreate={handleCreatePlanScenario}
             onDelete={handleDeletePlanScenario}
-            onRename={(id,name)=>setPlanScenarios(prev=>({...prev,scenarios:prev.scenarios.map(s=>s.id===id?{...s,name}:s)}))}
+            onRename={(id,name)=>setPlanScenarios(prev=>{const target=prev.scenarios.find(s=>s.id===id);if(target?.isDefault&&!isAdmin)return prev;return{...prev,scenarios:prev.scenarios.map(s=>s.id===id?{...s,name}:s)};})}
+            canRename={id=>{const s=planScenarios.scenarios.find(x=>x.id===id);return !s?.isDefault||isAdmin;}}
             label="Schedule Scenario"
           />
           {activePlanScenario&&(
