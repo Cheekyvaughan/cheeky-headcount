@@ -173,7 +173,7 @@ const STATUS = {
   ok:       { rowBg:"transparent",  icon:null,  },
   nearot:   { rowBg:"#FFFDF0",      icon:"🔶",  },
   ot:       { rowBg:"#FEF3C7",      icon:"⚠️",  },
-  daymax:   { rowBg:"#FEE2E2",      icon:"🚨",  },
+  daymax:   { rowBg:"#FEE2E2",      icon:"🚨",  label:"Potential Max Time" },
   minormax: { rowBg:"#FEE2E2",      icon:"🔞",  },
 };
 
@@ -292,12 +292,16 @@ function SaveBar({dirty,onSave,onClear,saving,isMobile}) {
 }
 
 // ── Scenario Selector ─────────────────────────────────────────────
-function ScenarioSelector({ scenarios, activeId, onSwitch, onCreate, onDelete, label="Scenario" }) {
+function ScenarioSelector({ scenarios, activeId, onSwitch, onCreate, onDelete, onRename, label="Scenario" }) {
   const [open, setOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [renamingId, setRenamingId] = useState(null);
+  const [renameVal, setRenameVal] = useState("");
   const active = scenarios.find(s=>s.id===activeId);
+  const startRename = (s) => { setRenamingId(s.id); setRenameVal(s.name); setConfirmDelete(null); };
+  const commitRename = (id) => { if(renameVal.trim()&&onRename) onRename(id,renameVal.trim()); setRenamingId(null); };
 
   return (
     <div style={{position:"relative",display:"inline-block"}}>
@@ -319,31 +323,44 @@ function ScenarioSelector({ scenarios, activeId, onSwitch, onCreate, onDelete, l
 
       {open && (
         <>
-          <div style={{position:"fixed",inset:0,zIndex:200}} onClick={()=>setOpen(false)}/>
+          <div style={{position:"fixed",inset:0,zIndex:200}} onClick={()=>{setOpen(false);setRenamingId(null);}}/>
           <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,minWidth:"220px",backgroundColor:CN.white,
             borderRadius:"10px",boxShadow:"0 8px 32px rgba(0,0,0,0.15)",border:`1px solid ${CN.border}`,zIndex:201,overflow:"hidden"}}>
             {scenarios.map(s=>(
               <div key={s.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",
-                padding:"10px 12px",backgroundColor:s.id===activeId?CN.orangeLight:"transparent",
-                borderBottom:`1px solid ${CN.creamDark}`,gap:"8px"}}>
-                <button onClick={()=>{onSwitch(s.id);setOpen(false);}}
-                  style={{flex:1,textAlign:"left",background:"none",border:"none",cursor:"pointer",
-                    fontSize:"13px",fontWeight:s.id===activeId?700:400,color:s.id===activeId?CN.orange:CN.dark,
-                    fontFamily:"'DM Sans',sans-serif",padding:0}}>
-                  {s.id===activeId?"✓ ":""}{s.name}
-                </button>
-                {scenarios.length>1&&(
-                  confirmDelete===s.id
-                    ? <div style={{display:"flex",gap:"4px"}}>
-                        <button onClick={()=>{onDelete(s.id);setConfirmDelete(null);setOpen(false);}}
-                          style={{fontSize:"10px",padding:"2px 6px",backgroundColor:CN.red,color:CN.white,border:"none",borderRadius:"4px",cursor:"pointer"}}>Delete</button>
-                        <button onClick={()=>setConfirmDelete(null)}
-                          style={{fontSize:"10px",padding:"2px 6px",backgroundColor:CN.creamDark,color:CN.mid,border:"none",borderRadius:"4px",cursor:"pointer"}}>Cancel</button>
-                      </div>
-                    : <button onClick={()=>setConfirmDelete(s.id)}
-                        style={{fontSize:"11px",color:CN.mid,background:"none",border:"none",cursor:"pointer",padding:"2px 4px",borderRadius:"4px"}}
-                        title="Delete scenario">🗑</button>
-                )}
+                padding:"8px 10px",backgroundColor:s.id===activeId?CN.orangeLight:"transparent",
+                borderBottom:`1px solid ${CN.creamDark}`,gap:"6px"}}>
+                {renamingId===s.id
+                  ? <input autoFocus value={renameVal} onChange={e=>setRenameVal(e.target.value)}
+                      onKeyDown={e=>{if(e.key==="Enter")commitRename(s.id);if(e.key==="Escape")setRenamingId(null);}}
+                      onBlur={()=>commitRename(s.id)}
+                      style={{flex:1,fontSize:"13px",fontFamily:"'DM Sans',sans-serif",padding:"2px 6px",borderRadius:4,border:`1.5px solid ${CN.orange}`,outline:"none"}}/>
+                  : <button onClick={()=>{onSwitch(s.id);setOpen(false);setRenamingId(null);}}
+                      style={{flex:1,textAlign:"left",background:"none",border:"none",cursor:"pointer",
+                        fontSize:"13px",fontWeight:s.id===activeId?700:400,color:s.id===activeId?CN.orange:CN.dark,
+                        fontFamily:"'DM Sans',sans-serif",padding:0}}>
+                      {s.id===activeId?"✓ ":""}{s.name}
+                    </button>
+                }
+                <div style={{display:"flex",gap:3,flexShrink:0}}>
+                  {renamingId!==s.id&&onRename&&(
+                    <button onClick={e=>{e.stopPropagation();startRename(s);}}
+                      style={{fontSize:"11px",color:CN.mid,background:"none",border:"none",cursor:"pointer",padding:"2px 4px",borderRadius:4}}
+                      title="Rename">✏️</button>
+                  )}
+                  {scenarios.length>1&&(
+                    confirmDelete===s.id
+                      ? <div style={{display:"flex",gap:"4px"}}>
+                          <button onClick={()=>{onDelete(s.id);setConfirmDelete(null);setOpen(false);}}
+                            style={{fontSize:"10px",padding:"2px 6px",backgroundColor:CN.red,color:CN.white,border:"none",borderRadius:"4px",cursor:"pointer"}}>Delete</button>
+                          <button onClick={()=>setConfirmDelete(null)}
+                            style={{fontSize:"10px",padding:"2px 6px",backgroundColor:CN.creamDark,color:CN.mid,border:"none",borderRadius:"4px",cursor:"pointer"}}>Cancel</button>
+                        </div>
+                      : <button onClick={()=>{setConfirmDelete(s.id);setRenamingId(null);}}
+                          style={{fontSize:"11px",color:CN.mid,background:"none",border:"none",cursor:"pointer",padding:"2px 4px",borderRadius:"4px"}}
+                          title="Delete scenario">🗑</button>
+                  )}
+                </div>
               </div>
             ))}
             <div style={{padding:"8px",borderTop:`1px solid ${CN.border}`,fontSize:"11px",color:CN.mid,textAlign:"center"}}>
@@ -615,6 +632,7 @@ function RolesTab({roleScenarios,setRoleScenarios,taxYears,ot,dirty,onSave,onCle
           onSwitch={id=>setRoleScenarios(prev=>({...prev,activeId:id}))}
           onCreate={handleCreateScenario}
           onDelete={handleDeleteScenario}
+          onRename={(id,name)=>setRoleScenarios(prev=>({...prev,scenarios:prev.scenarios.map(s=>s.id===id?{...s,name}:s)}))}
           label="Role Scenario"
         />
       </div>
@@ -837,6 +855,7 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
             onSwitch={id=>setPlanScenarios(prev=>({...prev,activeId:id}))}
             onCreate={handleCreatePlanScenario}
             onDelete={handleDeletePlanScenario}
+            onRename={(id,name)=>setPlanScenarios(prev=>({...prev,scenarios:prev.scenarios.map(s=>s.id===id?{...s,name}:s)}))}
             label="Schedule Scenario"
           />
           {activePlanScenario&&(
@@ -957,7 +976,7 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
                                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"10px"}}>
                                   <div>
                                     <div style={{fontWeight:600,fontSize:"14px",color:CN.dark,display:"flex",alignItems:"center",gap:"4px"}}>
-                                      {STATUS[st].icon&&<span>{STATUS[st].icon}</span>}{role.name} <span style={{fontSize:"11px",color:CN.mid,fontWeight:400}}>#{empIdx+1}</span>
+                                      {STATUS[st].icon&&<span>{STATUS[st].icon}</span>}{role.name} <span style={{fontSize:"11px",color:CN.mid,fontWeight:400}}>#{empIdx+1}</span>{STATUS[st].label&&st!=="ok"&&<span style={{fontSize:"10px",fontWeight:700,backgroundColor:"#FEE2E2",color:CN.red,padding:"1px 6px",borderRadius:99,marginLeft:4}}>{STATUS[st].label}</span>}
                                     </div>
                                     <div style={{fontSize:"11px",color:CN.mid}}>{role.payType==="Hourly"?`${fmt$(role.rate)}/hr`:`${fmt$(role.rate)}/mo ${role.exempt?"(exempt)":"(nonexempt)"}`}</div>
                                   </div>
@@ -1341,20 +1360,26 @@ function SummaryTab({roleScenarios,planScenarios,taxYears,ot,onRefresh}) {
               {/* Grouped bar chart comparison */}
               <Card>
                 <Sub>Total Cost by Scenario</Sub>
-                <div style={{display:"flex",gap:"20px",alignItems:"flex-end",height:"140px",marginBottom:"8px"}}>
-                  {compareData.map((s,i)=>{
-                    const colors=[CN.orange,CN.blue,CN.purple,CN.green,"#EC4899"];
-                    const c=colors[i%colors.length];
-                    const pct=(s.grandTotal.total/Math.max(...compareData.map(x=>x.grandTotal.total),1))*100;
-                    return (
-                      <div key={s.id} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"6px",flex:1}}>
-                        <div style={{fontSize:"11px",fontWeight:700,color:c}}>{fmtK(s.grandTotal.total)}</div>
-                        <div style={{width:"100%",backgroundColor:c,borderRadius:"4px 4px 0 0",height:`${Math.max(pct,2)}%`}}/>
-                        <div style={{fontSize:"10px",color:CN.mid,textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%"}}>{s.name}</div>
-                      </div>
-                    );
-                  })}
-                </div>
+                {(()=>{
+                  const BAR_H=120;
+                  const colors=[CN.orange,CN.blue,CN.purple,CN.green,"#EC4899"];
+                  const maxVal=Math.max(...compareData.map(x=>x.grandTotal.total),1);
+                  return (
+                    <div style={{display:"flex",gap:"16px",alignItems:"flex-end",height:`${BAR_H+48}px`,paddingTop:"24px"}}>
+                      {compareData.map((s,i)=>{
+                        const c=colors[i%colors.length];
+                        const barH=Math.max(Math.round((s.grandTotal.total/maxVal)*BAR_H),4);
+                        return (
+                          <div key={s.id} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:0,flex:1,minWidth:0}}>
+                            <div style={{fontSize:"11px",fontWeight:700,color:c,marginBottom:4,textAlign:"center"}}>{fmt$(s.grandTotal.total)}</div>
+                            <div style={{width:"100%",maxWidth:"80px",backgroundColor:c,borderRadius:"6px 6px 0 0",height:`${barH}px`,transition:"height 0.3s ease"}}/>
+                            <div style={{fontSize:"10px",color:CN.mid,textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%",marginTop:6,paddingTop:4,borderTop:`2px solid ${CN.border}`,width:"100%"}}>{s.name}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </Card>
 
               {/* Side-by-side table */}
