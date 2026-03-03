@@ -2131,7 +2131,24 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
   }
 
   // ── Render ────────────────────────────────────────────────────────
-  const stepStyle = { marginBottom: 24 };
+  const [currentStep, setCurrentStep] = useState(1);
+  const TOTAL_STEPS = 5;
+
+  // Step 4+5 only accessible after results exist
+  const canAdvance = (from) => {
+    if (from === 3) return !running; // Step 3 → 4 requires run first
+    return true;
+  };
+
+  const goNext = () => {
+    if (currentStep === 3 && !results) { runForecast(); return; }
+    if (currentStep < TOTAL_STEPS) setCurrentStep(s => s + 1);
+  };
+  const goBack = () => { if (currentStep > 1) setCurrentStep(s => s - 1); };
+
+  const STEP_LABELS = ["Week Setup", "Volume Inputs", "Assumptions", "Results", "Accept"];
+
+  const stepStyle = { marginBottom: 0 };
   const sectionLabel = { fontSize: 11, fontWeight: 700, textTransform: "uppercase",
     letterSpacing: "0.07em", color: CN.mid, marginBottom: 8, display: "block" };
   const inputStyle = { border: `1.5px solid ${CN.border}`, borderRadius: 8, padding: "7px 10px",
@@ -2145,11 +2162,78 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
     }}>{label}</button>
   );
 
+  // Step nav bar
+  const StepNav = () => (
+    <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 24, overflowX: "auto" }}>
+      {STEP_LABELS.map((label, i) => {
+        const step = i + 1;
+        const active = step === currentStep;
+        const done = step < currentStep || (step <= 3 && results && step < currentStep);
+        const locked = step >= 4 && !results;
+        return (
+          <div key={step} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+            <button
+              onClick={() => !locked && setCurrentStep(step)}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "6px 12px", borderRadius: 99,
+                backgroundColor: active ? CN.orange : done ? CN.creamDark : "transparent",
+                border: `1.5px solid ${active ? CN.orange : done ? CN.border : CN.border}`,
+                color: active ? CN.white : locked ? CN.border : CN.mid,
+                cursor: locked ? "not-allowed" : "pointer",
+                fontSize: 12, fontWeight: active ? 700 : 400,
+                fontFamily: "'DM Sans',sans-serif", whiteSpace: "nowrap"
+              }}>
+              <span style={{
+                width: 18, height: 18, borderRadius: "50%", display: "inline-flex",
+                alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800,
+                backgroundColor: active ? "rgba(255,255,255,0.25)" : done ? CN.orange : CN.border,
+                color: active ? CN.white : done ? CN.white : CN.mid, flexShrink: 0
+              }}>{done && step < currentStep ? "✓" : step}</span>
+              {!isMobile && label}
+            </button>
+            {i < STEP_LABELS.length - 1 && (
+              <div style={{ width: 20, height: 1.5, backgroundColor: step < currentStep ? CN.orange : CN.border, flexShrink: 0 }} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // Bottom navigation
+  const NavBar = ({ nextLabel, nextDisabled, onNext }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 24 }}>
+      <button onClick={goBack} style={{
+        display: "flex", alignItems: "center", gap: 6,
+        padding: "9px 18px", borderRadius: 10, border: `1.5px solid ${CN.border}`,
+        backgroundColor: CN.white, color: currentStep === 1 ? CN.border : CN.mid,
+        cursor: currentStep === 1 ? "not-allowed" : "pointer",
+        fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans',sans-serif"
+      }} disabled={currentStep === 1}>
+        ← Back
+      </button>
+      {currentStep < TOTAL_STEPS && (
+        <button onClick={onNext || goNext} disabled={nextDisabled}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "9px 20px", borderRadius: 10, border: "none",
+            backgroundColor: nextDisabled ? CN.border : CN.orange,
+            color: CN.white, cursor: nextDisabled ? "not-allowed" : "pointer",
+            fontSize: 13, fontWeight: 700, fontFamily: "'Barlow Condensed',sans-serif",
+            textTransform: "uppercase", letterSpacing: "0.06em"
+          }}>
+          {nextLabel || "Next →"}
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div style={{ maxWidth: 960, margin: "0 auto", padding: isMobile ? "16px 12px" : "28px 24px" }}>
 
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 20 }}>
         <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 800, fontSize: isMobile ? 20 : 26,
           textTransform: "uppercase", color: CN.dark, letterSpacing: "0.06em" }}>
           🔮 Headcount Forecaster
@@ -2159,6 +2243,8 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
         </div>
       </div>
 
+      <StepNav />
+
       {accepted && acceptedScenarios && (
         <Note type="success">
           ✅ Forecast accepted. Created role scenario <strong>"{acceptedScenarios.roleName}"</strong> and
@@ -2167,135 +2253,72 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
       )}
 
       {/* ── Step 1: Week + breaks ── */}
-      <Card style={stepStyle}>
-        <Sub>Step 1 — Week Setup</Sub>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 16 }}>
-          <div style={{ flex: "1 1 180px" }}>
-            <span style={sectionLabel}>Week of</span>
-            <input type="date" value={weekOf}
-              onChange={e => setWeekOf(e.target.value)}
-              style={{ ...inputStyle, width: "auto" }} />
-          </div>
-          <div style={{ flex: "1 1 220px" }}>
-            <span style={sectionLabel}>Meal break treatment</span>
-            <div style={{ display: "flex", gap: 8 }}>
-              {pillBtn(mealBreakPaid, () => setMealBreakPaid(true), "Paid (include in hours)")}
-              {pillBtn(!mealBreakPaid, () => setMealBreakPaid(false), "Unpaid (exclude)")}
+      {currentStep === 1 && (
+        <Card style={stepStyle}>
+          <Sub>Step 1 — Week Setup</Sub>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 16 }}>
+            <div style={{ flex: "1 1 180px" }}>
+              <span style={sectionLabel}>Week of</span>
+              <input type="date" value={weekOf}
+                onChange={e => setWeekOf(e.target.value)}
+                style={{ ...inputStyle, width: "auto" }} />
             </div>
-            <div style={{ fontSize: 11, color: CN.mid, marginTop: 4 }}>
-              10-min paid rests (per 4h) always included · WA RCW 49.12.187
+            <div style={{ flex: "1 1 220px" }}>
+              <span style={sectionLabel}>Meal break treatment</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                {pillBtn(mealBreakPaid, () => setMealBreakPaid(true), "Paid (include in hours)")}
+                {pillBtn(!mealBreakPaid, () => setMealBreakPaid(false), "Unpaid (exclude)")}
+              </div>
+              <div style={{ fontSize: 11, color: CN.mid, marginTop: 4 }}>
+                10-min paid rests (per 4h) always included · WA RCW 49.12.187
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Day grid */}
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 560 }}>
-            <thead>
-              <tr style={{ backgroundColor: CN.creamDark }}>
-                <th style={{ padding: "7px 10px", textAlign: "left", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Day</th>
-                <th style={{ padding: "7px 10px", textAlign: "center", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Closed</th>
-                <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Open</th>
-                <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Close</th>
-                <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Day Type</th>
-                <th style={{ padding: "7px 6px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Op Hrs</th>
-              </tr>
-            </thead>
-            <tbody>
-              {DAYS.map((d, i) => {
-                const di = dayInputs[d];
-                const opHrs = di.closed ? 0 : calcOperatingHrs(di.open, di.close);
-                return (
-                  <tr key={d} style={{ backgroundColor: i % 2 === 0 ? CN.white : CN.cream, opacity: di.closed ? 0.45 : 1 }}>
-                    <td style={{ padding: "7px 10px", fontWeight: 600, color: CN.dark }}>{DAY_LABELS[i]}</td>
-                    <td style={{ padding: "7px 10px", textAlign: "center" }}>
-                      <input type="checkbox" checked={!!di.closed} onChange={e => setDay(d, "closed", e.target.checked)}
-                        style={{ accentColor: CN.orange, width: 15, height: 15 }} />
-                    </td>
-                    <td style={{ padding: "4px 8px" }}>
-                      <input type="time" value={di.open} disabled={di.closed}
-                        onChange={e => setDay(d, "open", e.target.value)}
-                        style={{ ...inputStyle, width: 100, opacity: di.closed ? 0.4 : 1 }} />
-                    </td>
-                    <td style={{ padding: "4px 8px" }}>
-                      <input type="time" value={di.close} disabled={di.closed}
-                        onChange={e => setDay(d, "close", e.target.value)}
-                        style={{ ...inputStyle, width: 100, opacity: di.closed ? 0.4 : 1 }} />
-                    </td>
-                    <td style={{ padding: "4px 8px" }}>
-                      <select value={di.dayType} disabled={di.closed}
-                        onChange={e => setDay(d, "dayType", e.target.value)}
-                        style={{ ...inputStyle, width: 100, opacity: di.closed ? 0.4 : 1 }}>
-                        {Object.keys(DAY_TYPE_MULTIPLIERS).map(t => (
-                          <option key={t} value={t}>{t} ({DAY_TYPE_MULTIPLIERS[t]}×)</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td style={{ padding: "7px 6px", fontWeight: 700, color: opHrs > 0 ? CN.dark : CN.mid, fontSize: 13 }}>
-                      {opHrs > 0 ? opHrs.toFixed(1) + "h" : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* ── Step 2: Input mode + volume data ── */}
-      <Card style={stepStyle}>
-        <Sub>Step 2 — Volume Inputs</Sub>
-        <div style={{ marginBottom: 12 }}>
-          <span style={sectionLabel}>Forecasting basis</span>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {[
-              ["revenue", "💰 Revenue target"],
-              ["covers",  "👥 Cover / transaction count"],
-              ["direct",  "⏱ Direct labor hours"],
-              ["oponly",  "🕐 Operating hours only (floor)"],
-            ].map(([mode, label]) => pillBtn(inputMode === mode, () => setInputMode(mode), label))}
-          </div>
-          {inputMode === "oponly" && (
-            <div style={{ fontSize: 12, color: CN.mid, marginTop: 8 }}>
-              Floor-only mode: staffing is based purely on hours of operation and role minimum coverage. No volume signals used.
-            </div>
-          )}
-        </div>
-
-        {inputMode !== "oponly" && (
-          <div style={{ overflowX: "auto", marginTop: 8 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 480 }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 560 }}>
               <thead>
                 <tr style={{ backgroundColor: CN.creamDark }}>
                   <th style={{ padding: "7px 10px", textAlign: "left", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Day</th>
-                  {inputMode === "revenue" && <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Revenue ($)</th>}
-                  {inputMode === "covers"  && <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Covers</th>}
-                  {inputMode === "direct"  && <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Labor Hours</th>}
+                  <th style={{ padding: "7px 10px", textAlign: "center", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Closed</th>
+                  <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Open</th>
+                  <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Close</th>
+                  <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Day Type</th>
+                  <th style={{ padding: "7px 6px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Op Hrs</th>
                 </tr>
               </thead>
               <tbody>
                 {DAYS.map((d, i) => {
                   const di = dayInputs[d];
-                  if (di.closed) return null;
+                  const opHrs = di.closed ? 0 : calcOperatingHrs(di.open, di.close);
                   return (
-                    <tr key={d} style={{ backgroundColor: i % 2 === 0 ? CN.white : CN.cream }}>
-                      <td style={{ padding: "6px 10px", fontWeight: 600, color: CN.dark }}>{DAY_LABELS[i]}</td>
+                    <tr key={d} style={{ backgroundColor: i % 2 === 0 ? CN.white : CN.cream, opacity: di.closed ? 0.45 : 1 }}>
+                      <td style={{ padding: "7px 10px", fontWeight: 600, color: CN.dark }}>{DAY_LABELS[i]}</td>
+                      <td style={{ padding: "7px 10px", textAlign: "center" }}>
+                        <input type="checkbox" checked={!!di.closed} onChange={e => setDay(d, "closed", e.target.checked)}
+                          style={{ accentColor: CN.orange, width: 15, height: 15 }} />
+                      </td>
                       <td style={{ padding: "4px 8px" }}>
-                        {inputMode === "revenue" && (
-                          <input type="number" min={0} value={di.revenue} placeholder="e.g. 2500"
-                            onChange={e => setDay(d, "revenue", e.target.value)}
-                            style={{ ...inputStyle, width: 130 }} />
-                        )}
-                        {inputMode === "covers" && (
-                          <input type="number" min={0} value={di.covers} placeholder="e.g. 80"
-                            onChange={e => setDay(d, "covers", e.target.value)}
-                            style={{ ...inputStyle, width: 130 }} />
-                        )}
-                        {inputMode === "direct" && (
-                          <input type="number" min={0} step={0.5} value={di.directHrs} placeholder="e.g. 40"
-                            onChange={e => setDay(d, "directHrs", e.target.value)}
-                            style={{ ...inputStyle, width: 130 }} />
-                        )}
+                        <input type="time" value={di.open} disabled={di.closed}
+                          onChange={e => setDay(d, "open", e.target.value)}
+                          style={{ ...inputStyle, width: 100, opacity: di.closed ? 0.4 : 1 }} />
+                      </td>
+                      <td style={{ padding: "4px 8px" }}>
+                        <input type="time" value={di.close} disabled={di.closed}
+                          onChange={e => setDay(d, "close", e.target.value)}
+                          style={{ ...inputStyle, width: 100, opacity: di.closed ? 0.4 : 1 }} />
+                      </td>
+                      <td style={{ padding: "4px 8px" }}>
+                        <select value={di.dayType} disabled={di.closed}
+                          onChange={e => setDay(d, "dayType", e.target.value)}
+                          style={{ ...inputStyle, width: 100, opacity: di.closed ? 0.4 : 1 }}>
+                          {Object.keys(DAY_TYPE_MULTIPLIERS).map(t => (
+                            <option key={t} value={t}>{t} ({DAY_TYPE_MULTIPLIERS[t]}×)</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td style={{ padding: "7px 6px", fontWeight: 700, color: opHrs > 0 ? CN.dark : CN.mid, fontSize: 13 }}>
+                        {opHrs > 0 ? opHrs.toFixed(1) + "h" : "—"}
                       </td>
                     </tr>
                   );
@@ -2303,136 +2326,205 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
               </tbody>
             </table>
           </div>
-        )}
-      </Card>
+          <NavBar />
+        </Card>
+      )}
 
-      {/* ── Step 3: Assumptions per role ── */}
-      <Card style={stepStyle}>
-        <Sub>Step 3 — Productivity Assumptions</Sub>
-        <Note type="info">
-          These are planning benchmarks — not actuals. Edit to match your operation before running. Sources linked via (i).
-        </Note>
-        {localRoles.length === 0 && (
-          <Note type="warning">No active hourly roles found. Add roles in the Job Roles tab first.</Note>
-        )}
-        {localRoles.length > 0 && (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 580 }}>
-              <thead>
-                <tr style={{ backgroundColor: CN.creamDark }}>
-                  <th style={{ padding: "7px 10px", textAlign: "left", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Role</th>
-                  <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>
-                    Rev/hr ($) <InfoTip source={getBenchmark("default").source} url={getBenchmark("default").sourceUrl} />
-                  </th>
-                  <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>
-                    Covers/hr <InfoTip source="Cornell Hospitality Quarterly — Labor Productivity in Foodservice" url="https://journals.sagepub.com/home/cqx" />
-                  </th>
-                  <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>
-                    Floor <InfoTip source="Minimum viable coverage — 1 person must be present for the role whenever open" url="https://restaurant.org/research-and-media/research/economists-notebook/analysis-commentary/independent-restaurant-performance-report/" />
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {localRoles.map((r, i) => {
-                  const a = assumptions[r.id] || getBenchmark(r.name);
-                  const bench = getBenchmark(r.name);
-                  return (
-                    <tr key={r.id} style={{ backgroundColor: i % 2 === 0 ? CN.white : CN.cream }}>
-                      <td style={{ padding: "7px 10px" }}>
-                        <div style={{ fontWeight: 600, color: CN.dark }}>{r.name}</div>
-                        <div style={{ fontSize: 10, color: CN.mid }}>{r.category} · ${r.rate}/hr</div>
-                      </td>
-                      <td style={{ padding: "4px 8px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                          <input type="number" min={0} value={a.revenuePerHr ?? ""} placeholder="n/a"
-                            onChange={e => setAssumption(r.id, "revenuePerHr", e.target.value === "" ? null : e.target.value)}
-                            style={{ ...inputStyle, width: 80 }} />
-                          <InfoTip source={bench.source} url={bench.sourceUrl} />
-                        </div>
-                      </td>
-                      <td style={{ padding: "4px 8px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                          <input type="number" min={0} value={a.coversPerHr ?? ""} placeholder="n/a"
-                            onChange={e => setAssumption(r.id, "coversPerHr", e.target.value === "" ? null : e.target.value)}
-                            style={{ ...inputStyle, width: 80 }} />
-                          <InfoTip source={bench.source} url={bench.sourceUrl} />
-                        </div>
-                      </td>
-                      <td style={{ padding: "4px 8px" }}>
-                        <input type="number" min={0} max={5} value={a.floor}
-                          onChange={e => setAssumption(r.id, "floor", e.target.value)}
-                          style={{ ...inputStyle, width: 60 }} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Gap role addition */}
-        {gaps.length > 0 && (
-          <div style={{ marginTop: 16 }}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: CN.amberDark, marginBottom: 8 }}>⚠ Suggested roles not yet configured:</div>
-            {gaps.map(gap => (
-              <div key={gap} style={{ marginBottom: 8 }}>
-                {addingGap === gap ? (
-                  <div style={{ backgroundColor: CN.creamDark, borderRadius: 10, padding: 14 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>Add role: {gap}</div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
-                      <input placeholder="Role name" value={gapForm.name}
-                        onChange={e => setGapForm(p => ({ ...p, name: e.target.value }))}
-                        style={{ ...inputStyle, width: 160 }} />
-                      <select value={gapForm.category}
-                        onChange={e => setGapForm(p => ({ ...p, category: e.target.value }))}
-                        style={{ ...inputStyle, width: 120 }}>
-                        {["BOH","FOH","Management","Other"].map(c => <option key={c}>{c}</option>)}
-                      </select>
-                      <input type="number" placeholder="$/hr" value={gapForm.rate}
-                        onChange={e => setGapForm(p => ({ ...p, rate: e.target.value }))}
-                        style={{ ...inputStyle, width: 90 }} />
-                      <input type="number" placeholder="Default hrs/wk" value={gapForm.defaultHours}
-                        onChange={e => setGapForm(p => ({ ...p, defaultHours: e.target.value }))}
-                        style={{ ...inputStyle, width: 130 }} />
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <Btn onClick={commitGapRole} style={{ opacity: gapForm.name && gapForm.rate ? 1 : 0.4 }}>Add Role</Btn>
-                      <Btn variant="ghost" onClick={() => setAddingGap(null)}>Cancel</Btn>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px",
-                    backgroundColor: CN.amberLight, borderRadius: 8, border: `1px solid ${CN.amber}` }}>
-                    <span style={{ fontSize: 12, color: CN.amberDark, flex: 1 }}>Missing role: <strong>{gap}</strong></span>
-                    <Btn variant="ghost" onClick={() => { setAddingGap(gap); setGapForm(p => ({ ...p, name: gap })); }}>
-                      Add Inline
-                    </Btn>
-                  </div>
-                )}
+      {/* ── Step 2: Input mode + volume data ── */}
+      {currentStep === 2 && (
+        <Card style={stepStyle}>
+          <Sub>Step 2 — Volume Inputs</Sub>
+          <div style={{ marginBottom: 12 }}>
+            <span style={sectionLabel}>Forecasting basis</span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {[
+                ["revenue", "💰 Revenue target"],
+                ["covers",  "👥 Cover / transaction count"],
+                ["direct",  "⏱ Direct labor hours"],
+                ["oponly",  "🕐 Operating hours only (floor)"],
+              ].map(([mode, label]) => pillBtn(inputMode === mode, () => setInputMode(mode), label))}
+            </div>
+            {inputMode === "oponly" && (
+              <div style={{ fontSize: 12, color: CN.mid, marginTop: 8 }}>
+                Floor-only mode: staffing based purely on hours of operation and role minimum coverage.
               </div>
-            ))}
+            )}
           </div>
-        )}
 
-        <div style={{ marginTop: 16 }}>
-          <button onClick={runForecast} disabled={running || localRoles.length === 0}
-            style={{ padding: "10px 24px", backgroundColor: running ? CN.mid : CN.orange, color: CN.white,
-              border: "none", borderRadius: 10, cursor: running ? "not-allowed" : "pointer",
-              fontSize: 14, fontWeight: 700, fontFamily: "'Barlow Condensed',sans-serif",
-              textTransform: "uppercase", letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 8 }}>
-            {running ? "⟳ Running…" : "▶ Run Forecast"}
-          </button>
-          {runError && <div style={{ color: CN.red, fontSize: 12, marginTop: 8 }}>{runError}</div>}
-        </div>
-      </Card>
+          {inputMode !== "oponly" && (
+            <div style={{ overflowX: "auto", marginTop: 8 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 480 }}>
+                <thead>
+                  <tr style={{ backgroundColor: CN.creamDark }}>
+                    <th style={{ padding: "7px 10px", textAlign: "left", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Day</th>
+                    {inputMode === "revenue" && <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Revenue ($)</th>}
+                    {inputMode === "covers"  && <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Covers</th>}
+                    {inputMode === "direct"  && <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Labor Hours</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {DAYS.map((d, i) => {
+                    const di = dayInputs[d];
+                    if (di.closed) return null;
+                    return (
+                      <tr key={d} style={{ backgroundColor: i % 2 === 0 ? CN.white : CN.cream }}>
+                        <td style={{ padding: "6px 10px", fontWeight: 600, color: CN.dark }}>{DAY_LABELS[i]}</td>
+                        <td style={{ padding: "4px 8px" }}>
+                          {inputMode === "revenue" && (
+                            <input type="number" min={0} value={di.revenue} placeholder="e.g. 2500"
+                              onChange={e => setDay(d, "revenue", e.target.value)}
+                              style={{ ...inputStyle, width: 130 }} />
+                          )}
+                          {inputMode === "covers" && (
+                            <input type="number" min={0} value={di.covers} placeholder="e.g. 80"
+                              onChange={e => setDay(d, "covers", e.target.value)}
+                              style={{ ...inputStyle, width: 130 }} />
+                          )}
+                          {inputMode === "direct" && (
+                            <input type="number" min={0} step={0.5} value={di.directHrs} placeholder="e.g. 40"
+                              onChange={e => setDay(d, "directHrs", e.target.value)}
+                              style={{ ...inputStyle, width: 130 }} />
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <NavBar />
+        </Card>
+      )}
 
-      {/* ── Results ── */}
-      {results && (
-        <>
-          {/* Claude narrative */}
+      {/* ── Step 3: Assumptions + Run ── */}
+      {currentStep === 3 && (
+        <Card style={stepStyle}>
+          <Sub>Step 3 — Productivity Assumptions</Sub>
+          <Note type="info">
+            These are planning benchmarks — not actuals. Edit to match your operation before running. Sources linked via (i).
+          </Note>
+          {localRoles.length === 0 && (
+            <Note type="warning">No active hourly roles found. Add roles in the Job Roles tab first.</Note>
+          )}
+          {localRoles.length > 0 && (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 580 }}>
+                <thead>
+                  <tr style={{ backgroundColor: CN.creamDark }}>
+                    <th style={{ padding: "7px 10px", textAlign: "left", fontWeight: 700, color: CN.mid, fontSize: 11 }}>Role</th>
+                    <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>
+                      Rev/hr ($) <InfoTip source={getBenchmark("default").source} url={getBenchmark("default").sourceUrl} />
+                    </th>
+                    <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>
+                      Covers/hr <InfoTip source="Cornell Hospitality Quarterly — Labor Productivity in Foodservice" url="https://journals.sagepub.com/home/cqx" />
+                    </th>
+                    <th style={{ padding: "7px 10px", fontWeight: 700, color: CN.mid, fontSize: 11 }}>
+                      Floor <InfoTip source="Minimum viable coverage — 1 person must be present for the role whenever open" url="https://restaurant.org/research-and-media/research/economists-notebook/analysis-commentary/independent-restaurant-performance-report/" />
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {localRoles.map((r, i) => {
+                    const a = assumptions[r.id] || getBenchmark(r.name);
+                    const bench = getBenchmark(r.name);
+                    return (
+                      <tr key={r.id} style={{ backgroundColor: i % 2 === 0 ? CN.white : CN.cream }}>
+                        <td style={{ padding: "7px 10px" }}>
+                          <div style={{ fontWeight: 600, color: CN.dark }}>{r.name}</div>
+                          <div style={{ fontSize: 10, color: CN.mid }}>{r.category} · ${r.rate}/hr</div>
+                        </td>
+                        <td style={{ padding: "4px 8px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <input type="number" min={0} value={a.revenuePerHr ?? ""} placeholder="n/a"
+                              onChange={e => setAssumption(r.id, "revenuePerHr", e.target.value === "" ? null : e.target.value)}
+                              style={{ ...inputStyle, width: 80 }} />
+                            <InfoTip source={bench.source} url={bench.sourceUrl} />
+                          </div>
+                        </td>
+                        <td style={{ padding: "4px 8px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <input type="number" min={0} value={a.coversPerHr ?? ""} placeholder="n/a"
+                              onChange={e => setAssumption(r.id, "coversPerHr", e.target.value === "" ? null : e.target.value)}
+                              style={{ ...inputStyle, width: 80 }} />
+                            <InfoTip source={bench.source} url={bench.sourceUrl} />
+                          </div>
+                        </td>
+                        <td style={{ padding: "4px 8px" }}>
+                          <input type="number" min={0} max={5} value={a.floor}
+                            onChange={e => setAssumption(r.id, "floor", e.target.value)}
+                            style={{ ...inputStyle, width: 60 }} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Gap role addition */}
+          {gaps.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: CN.amberDark, marginBottom: 8 }}>⚠ Suggested roles not yet configured:</div>
+              {gaps.map(gap => (
+                <div key={gap} style={{ marginBottom: 8 }}>
+                  {addingGap === gap ? (
+                    <div style={{ backgroundColor: CN.creamDark, borderRadius: 10, padding: 14 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>Add role: {gap}</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+                        <input placeholder="Role name" value={gapForm.name}
+                          onChange={e => setGapForm(p => ({ ...p, name: e.target.value }))}
+                          style={{ ...inputStyle, width: 160 }} />
+                        <select value={gapForm.category}
+                          onChange={e => setGapForm(p => ({ ...p, category: e.target.value }))}
+                          style={{ ...inputStyle, width: 120 }}>
+                          {["BOH","FOH","Management","Other"].map(c => <option key={c}>{c}</option>)}
+                        </select>
+                        <input type="number" placeholder="$/hr" value={gapForm.rate}
+                          onChange={e => setGapForm(p => ({ ...p, rate: e.target.value }))}
+                          style={{ ...inputStyle, width: 90 }} />
+                        <input type="number" placeholder="Default hrs/wk" value={gapForm.defaultHours}
+                          onChange={e => setGapForm(p => ({ ...p, defaultHours: e.target.value }))}
+                          style={{ ...inputStyle, width: 130 }} />
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <Btn onClick={commitGapRole} style={{ opacity: gapForm.name && gapForm.rate ? 1 : 0.4 }}>Add Role</Btn>
+                        <Btn variant="ghost" onClick={() => setAddingGap(null)}>Cancel</Btn>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px",
+                      backgroundColor: CN.amberLight, borderRadius: 8, border: `1px solid ${CN.amber}` }}>
+                      <span style={{ fontSize: 12, color: CN.amberDark, flex: 1 }}>Missing role: <strong>{gap}</strong></span>
+                      <Btn variant="ghost" onClick={() => { setAddingGap(gap); setGapForm(p => ({ ...p, name: gap })); }}>
+                        Add Inline
+                      </Btn>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {runError && <Note type="alert">{runError}</Note>}
+
+          <NavBar
+            nextLabel={running ? "⟳ Running…" : results ? "View Results →" : "▶ Run Forecast"}
+            nextDisabled={running || localRoles.length === 0}
+            onNext={() => {
+              if (results) { setCurrentStep(4); return; }
+              runForecast().then(() => setCurrentStep(4));
+            }}
+          />
+        </Card>
+      )}
+
+      {/* ── Step 4: Results ── */}
+      {currentStep === 4 && (
+        <div>
           {claudeNarrative && (
-            <Card style={stepStyle}>
+            <Card style={{ marginBottom: 16 }}>
               <Sub>Claude Analysis</Sub>
               <div style={{ fontSize: 13, color: CN.dark, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
                 {claudeNarrative}
@@ -2440,10 +2532,9 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
             </Card>
           )}
 
-          {/* Distribution toggle */}
           <Card style={stepStyle}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
-              <Sub style={{ margin: 0 }}>Step 4 — Forecast Results</Sub>
+              <Sub style={{ margin: 0 }}>Forecast Results</Sub>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 11, color: CN.mid, alignSelf: "center" }}>Distribution:</span>
                 {(claudeDistribution ? [["claude","🤖 Claude"],["even","⚖ Even"],["weighted","📅 Day-weighted"]] : [["even","⚖ Even"],["weighted","📅 Day-weighted"]]).map(([m,l]) =>
@@ -2453,14 +2544,13 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
             </div>
 
             {localRoles.map((role, ri) => {
-              const res = results[role.id];
+              const res = results?.[role.id];
               if (!res) return null;
               const dist = getDistribution(role.id);
               const cost = calcForecastCost(role.id);
               return (
                 <div key={role.id} style={{ marginBottom: 16, border: `1.5px solid ${CN.border}`,
                   borderRadius: 10, overflow: "hidden" }}>
-                  {/* Role header */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
                     padding: "10px 14px", backgroundColor: CN.creamDark, flexWrap: "wrap", gap: 8 }}>
                     <div>
@@ -2470,27 +2560,20 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
                     <div style={{ display: "flex", gap: 16 }}>
                       <div style={{ textAlign: "right" }}>
                         <div style={{ fontSize: 10, color: CN.mid }}>People needed</div>
-                        <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 18, fontWeight: 800, color: CN.orange }}>
-                          {res.headcount}
-                        </div>
+                        <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 18, fontWeight: 800, color: CN.orange }}>{res.headcount}</div>
                       </div>
                       <div style={{ textAlign: "right" }}>
                         <div style={{ fontSize: 10, color: CN.mid }}>Total hrs</div>
-                        <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 18, fontWeight: 800, color: CN.dark }}>
-                          {res.totalHrs.toFixed(1)}h
-                        </div>
+                        <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 18, fontWeight: 800, color: CN.dark }}>{res.totalHrs.toFixed(1)}h</div>
                       </div>
                       {cost && (
                         <div style={{ textAlign: "right" }}>
                           <div style={{ fontSize: 10, color: CN.mid }}>Week cost</div>
-                          <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 18, fontWeight: 800, color: CN.blue }}>
-                            {fmt$(cost.total)}
-                          </div>
+                          <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 18, fontWeight: 800, color: CN.blue }}>{fmt$(cost.total)}</div>
                         </div>
                       )}
                     </div>
                   </div>
-                  {/* Day breakdown */}
                   <div style={{ display: "flex", borderTop: `1px solid ${CN.border}` }}>
                     {DAYS.map((d, i) => {
                       const hrs = dist[d] || 0;
@@ -2507,7 +2590,6 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
                       );
                     })}
                   </div>
-                  {/* Cost breakdown */}
                   {cost && (
                     <div style={{ display: "flex", gap: 16, padding: "8px 14px", backgroundColor: CN.cream,
                       fontSize: 11, color: CN.mid, flexWrap: "wrap" }}>
@@ -2521,44 +2603,50 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
               );
             })}
 
-            {/* Total cost */}
             <div style={{ display: "flex", justifyContent: "flex-end", padding: "12px 14px",
               backgroundColor: CN.dark, borderRadius: 10, marginTop: 8 }}>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>Total forecast labor cost</div>
-                <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 24, fontWeight: 800, color: CN.white }}>
-                  {fmt$(totalCost)}
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          {/* ── Step 5: Accept ── */}
-          <Card>
-            <Sub>Step 5 — Accept Forecast</Sub>
-            <div style={{ marginBottom: 14 }}>
-              <span style={sectionLabel}>Output format</span>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {pillBtn(outputFormat === "headcount", () => setOutputFormat("headcount"), "👤 Headcount summary")}
-                {pillBtn(outputFormat === "hours",     () => setOutputFormat("hours"),     "⏱ Hours per role")}
-                {pillBtn(outputFormat === "skeleton",  () => setOutputFormat("skeleton"),  "📅 Weekly skeleton")}
-              </div>
-              <div style={{ fontSize: 11, color: CN.mid, marginTop: 6 }}>
-                {outputFormat === "headcount" && "Creates a role scenario with the suggested number of people. No hours pre-filled."}
-                {outputFormat === "hours"     && "Creates a plan scenario with total weekly hours per role, distributed evenly."}
-                {outputFormat === "skeleton"  && "Creates a full day-by-day schedule using the " + distMode + " distribution."}
+                <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 24, fontWeight: 800, color: CN.white }}>{fmt$(totalCost)}</div>
               </div>
             </div>
 
-            <Note type="info">
-              This will create a new Role Scenario and Schedule Scenario labelled "Forecast — {fmtWeek(weekOf)}". You can rename them after.
-            </Note>
-
-            <Btn onClick={acceptForecast} style={{ marginTop: 4 }}>
-              ✓ Accept &amp; Create Scenarios
-            </Btn>
+            <NavBar />
           </Card>
-        </>
+        </div>
+      )}
+
+      {/* ── Step 5: Accept ── */}
+      {currentStep === 5 && (
+        <Card style={stepStyle}>
+          <Sub>Step 5 — Accept Forecast</Sub>
+          <div style={{ marginBottom: 14 }}>
+            <span style={sectionLabel}>Output format</span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {pillBtn(outputFormat === "headcount", () => setOutputFormat("headcount"), "👤 Headcount summary")}
+              {pillBtn(outputFormat === "hours",     () => setOutputFormat("hours"),     "⏱ Hours per role")}
+              {pillBtn(outputFormat === "skeleton",  () => setOutputFormat("skeleton"),  "📅 Weekly skeleton")}
+            </div>
+            <div style={{ fontSize: 11, color: CN.mid, marginTop: 6 }}>
+              {outputFormat === "headcount" && "Creates a role scenario with the suggested number of people. No hours pre-filled."}
+              {outputFormat === "hours"     && "Creates a plan scenario with total weekly hours per role, distributed evenly."}
+              {outputFormat === "skeleton"  && "Creates a full day-by-day schedule using the " + distMode + " distribution."}
+            </div>
+          </div>
+
+          <Note type="info">
+            This will create a new Role Scenario and Schedule Scenario labelled "Forecast — {fmtWeek(weekOf)}". You can rename them after.
+          </Note>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16 }}>
+            <button onClick={goBack} style={{
+              padding: "9px 18px", borderRadius: 10, border: `1.5px solid ${CN.border}`,
+              backgroundColor: CN.white, color: CN.mid, cursor: "pointer",
+              fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans',sans-serif"
+            }}>← Back</button>
+            <Btn onClick={acceptForecast}>✓ Accept &amp; Create Scenarios</Btn>
+          </div>
+        </Card>
       )}
     </div>
   );
