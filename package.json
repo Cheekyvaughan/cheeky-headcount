@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.25.7",
@@ -16,6 +17,7 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.25.6",
     "@eslint/js": "^9.39.1",
     "@tailwindcss/vite": "^4.2.1",
     "@types/react": "^19.2.7",
@@ -25,7 +27,8 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
-    "vite": "^8.0.0-beta.13"
+    "vite": "^8.0.0-beta.13",
+    "wrangler": "^4.69.0"
   },
   "overrides": {
     "vite": "^8.0.0-beta.13"
