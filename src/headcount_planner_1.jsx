@@ -635,9 +635,9 @@ function RolesTab({roleScenarios,setRoleScenarios,taxYears,ot,dirty,onSave,onCle
                       </div>
                     </div>
                     <div style={{display:"flex",flexDirection:"column",gap:"2px"}}>
-                      <Btn variant="ghost" onClick={readOnly?null:()=>setEditing(role.id)} style={{opacity:readOnly?0.3:1,cursor:readOnly?"not-allowed":"pointer"}}>Edit</Btn>
-                      <Btn variant="ghost" onClick={readOnly?null:()=>toggle(role.id)} style={{color:CN.mid,opacity:readOnly?0.3:1,cursor:readOnly?"not-allowed":"pointer"}}>{role.active?"Deactivate":"Activate"}</Btn>
-                      <Btn variant="danger" onClick={readOnly?null:()=>remove(role.id)} style={{opacity:readOnly?0.3:1,cursor:readOnly?"not-allowed":"pointer"}}>Remove</Btn>
+                      <Btn variant="ghost" onClick={()=>{if(!readOnly)setEditing(role.id);}} style={{opacity:readOnly?0.3:1,cursor:readOnly?"not-allowed":"pointer",pointerEvents:readOnly?"none":"auto"}}>Edit</Btn>
+                      <Btn variant="ghost" onClick={()=>{if(!readOnly)toggle(role.id);}} style={{color:CN.mid,opacity:readOnly?0.3:1,cursor:readOnly?"not-allowed":"pointer",pointerEvents:readOnly?"none":"auto"}}>{role.active?"Deactivate":"Activate"}</Btn>
+                      <Btn variant="danger" onClick={()=>{if(!readOnly)remove(role.id);}} style={{opacity:readOnly?0.3:1,cursor:readOnly?"not-allowed":"pointer",pointerEvents:readOnly?"none":"auto"}}>Remove</Btn>
                     </div>
                   </div>
                 </Card>
@@ -909,7 +909,7 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
                                     onChange={e=>updateDay(plan.id,activeDay,e.target.value)}
                                     style={{flex:1,textAlign:"center",border:`1.5px solid ${overDay?CN.red:CN.border}`,borderRadius:"8px",padding:"10px",fontSize:"18px",fontWeight:700,fontFamily:"'DM Sans',sans-serif",backgroundColor:overDay?"#FEE2E2":CN.white,color:overDay?CN.red:CN.dark,outline:"none",boxSizing:"border-box"}}
                                   />
-                                  <button onClick={()=>removeRow(plan.id)} style={{border:`1px solid ${CN.border}`,background:CN.white,cursor:"pointer",color:CN.mid,fontSize:"13px",padding:"8px 10px",borderRadius:"8px"}}>✕</button>
+                                  <button onClick={()=>{if(!readOnly)removeRow(plan.id);}} style={{border:`1px solid ${CN.border}`,background:CN.white,cursor:"pointer",color:CN.mid,fontSize:"13px",padding:"8px 10px",borderRadius:"8px"}}>✕</button>
                                 </div>
                                 <div style={{display:"flex",gap:"12px",marginTop:"8px",flexWrap:"wrap"}}>
                                   <span style={{fontSize:"11px",color:CN.mid}}>Week: <strong style={{color:CN.dark}}>{cost.totalHrs>0?cost.totalHrs.toFixed(1)+"h":"—"}</strong></span>
@@ -918,7 +918,7 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
                               </div>
                             );
                           })}
-                          <button onClick={()=>addRow(role.id)} style={{border:`1px dashed ${CN.orange}`,background:"none",cursor:"pointer",color:CN.orange,fontSize:"12px",fontWeight:700,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",padding:"8px 14px",borderRadius:"8px",width:"100%",marginBottom:"8px"}}>
+                          <button onClick={()=>{if(!readOnly)addRow(role.id);}} style={{border:`1px dashed ${CN.orange}`,background:"none",cursor:"pointer",color:CN.orange,fontSize:"12px",fontWeight:700,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",padding:"8px 14px",borderRadius:"8px",width:"100%",marginBottom:"8px"}}>
                             + Add {role.name}
                           </button>
                         </div>
@@ -982,7 +982,7 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
                                       </div>
                                       {cost.otHrs>0&&<div style={{fontSize:"10px",color:CN.amberDark,fontWeight:700}}>+{cost.otHrs.toFixed(1)}h OT · +{fmt$(cost.otPremium)}</div>}
                                     </div>
-                                    <button onClick={()=>removeRow(plan.id)} style={{border:"none",background:"none",cursor:"pointer",color:CN.border,fontSize:"13px",padding:"0",lineHeight:1}}>✕</button>
+                                    <button onClick={()=>{if(!readOnly)removeRow(plan.id);}} style={{border:"none",background:"none",cursor:"pointer",color:CN.border,fontSize:"13px",padding:"0",lineHeight:1}}>✕</button>
                                   </div>
                                 </td>
                                 {DAYS.map(d=>{
@@ -1005,7 +1005,7 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
                           }),
                           <tr key={"add-"+role.id} style={{backgroundColor:CN.cream}}>
                             <td colSpan={11} style={{padding:"3px 8px",borderTop:`1px solid ${CN.creamDark}`}}>
-                              <button onClick={()=>addRow(role.id)} style={{border:"none",background:"none",cursor:"pointer",color:CN.orange,fontSize:"11px",fontWeight:700,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",letterSpacing:"0.06em",padding:"5px 8px",borderRadius:"6px"}}>
+                              <button onClick={()=>{if(!readOnly)addRow(role.id);}} style={{border:"none",background:"none",cursor:"pointer",color:CN.orange,fontSize:"11px",fontWeight:700,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",letterSpacing:"0.06em",padding:"5px 8px",borderRadius:"6px"}}>
                                 + Add {role.name}
                               </button>
                             </td>
@@ -1728,10 +1728,19 @@ export default function App({ currentUser }) {
 
     let rs = rsData.value;
     if (!rs) { rs = (await getMigrated()).rs; }
+    // Normalize: if no scenario is marked isDefault, stamp the first one.
+    // This handles data saved before the isDefault feature was introduced.
+    if (rs && rs.scenarios.length > 0 && !rs.scenarios.some(s => s.isDefault)) {
+      rs = { ...rs, scenarios: rs.scenarios.map((s, i) => i === 0 ? { ...s, isDefault: true } : s) };
+    }
     setRoleScenarios(rs); setSavedRS(deepClone(rs)); lastKnownAt.current[SK.roleScenarios] = rsData.updated_at;
 
     let ps = psData.value;
     if (!ps) { ps = (await getMigrated()).ps; }
+    // Same normalization for plan scenarios
+    if (ps && ps.scenarios.length > 0 && !ps.scenarios.some(s => s.isDefault)) {
+      ps = { ...ps, scenarios: ps.scenarios.map((s, i) => i === 0 ? { ...s, isDefault: true } : s) };
+    }
     setPlanScenarios(ps); setSavedPS(deepClone(ps)); lastKnownAt.current[SK.planScenarios] = psData.updated_at;
 
     // Tax years (shared) — migrate from old single-year format if needed
