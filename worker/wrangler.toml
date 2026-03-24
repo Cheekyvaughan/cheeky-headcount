@@ -1,0 +1,13 @@
+name            = "cheeky-headcount"
+main            = "index.js"
+compatibility_date = "2024-01-01"
+
+# D1 database binding — replace database_id with the ID from your dashboard
+# Cloudflare dashboard → Workers & Pages → D1 → cheeky-headcount-storage → copy ID
+[[d1_databases]]
+binding       = "DB"
+database_name = "cheeky-headcount-storage"
+database_id   = "b4ca158a-5599-4fe2-974c-8f454e132ef1"
+
+# Note: ANTHROPIC_API_KEY is a secret — set it via the dashboard, not here.
+# Dashboard → Worker → Settings → Variables → Add secret

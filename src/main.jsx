@@ -24,11 +24,8 @@ function StorageInit() {
   const { isSignedIn, getToken } = useAuth()
   const { user, isLoaded } = useUser()
   const [storageReady, setStorageReady] = useState(false)
-  // initStorage must only be called once — guard against StrictMode double-fire
   const initDone = useRef(false)
 
-  // ALL hooks must come before any conditional return (Rules of Hooks)
-  // Memoize on stable primitives so currentUser ref doesn't change between renders
   const currentUser = useMemo(() => {
     if (!user) return null
     return {
@@ -49,6 +46,7 @@ function StorageInit() {
   useEffect(() => {
     if (isSignedIn && !initDone.current) {
       initDone.current = true
+      // No template arg — Worker accepts the standard Clerk session JWT
       initStorage(getToken)
       setStorageReady(true)
     }
@@ -74,10 +72,8 @@ function Root() {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <ClerkProvider
-      publishableKey={CLERK_PUBLISHABLE_KEY}
-      clerkJSUrl="https://unpkg.com/@clerk/clerk-js@5/dist/clerk.browser.js"
-    >
+    {/* clerkJSUrl removed — Clerk is now bundled from npm, not loaded from unpkg CDN */}
+    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
       <Root />
     </ClerkProvider>
   </React.StrictMode>
