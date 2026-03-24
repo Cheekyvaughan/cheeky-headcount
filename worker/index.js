@@ -44,13 +44,15 @@ async function getClerkUserId(authHeader) {
 
   const header  = decodeJson(parts[0])
   const payload = decodeJson(parts[1])
+  const EXPECTED_ISSUER = 'https://clerk.cheekyfoods.app'
 
   if (!payload.exp || payload.exp * 1000 < Date.now()) throw new Error('Token expired')
   if (!payload.iss) throw new Error('Missing iss claim')
   if (!payload.sub) throw new Error('Missing sub claim')
+  if (payload.iss !== EXPECTED_ISSUER) throw new Error('Invalid issuer')
 
-  // Derive JWKS URL from the iss claim — no extra secrets needed
-  const jwksUrl = `${payload.iss}/.well-known/jwks.json`
+  // Hardcoded to prevent JWKS URL spoofing via a forged iss claim
+  const jwksUrl = 'https://clerk.cheekyfoods.app/.well-known/jwks.json'
 
   const now = Date.now()
   if (!_jwksCache || now - _jwksCacheTime > JWKS_TTL_MS) {
