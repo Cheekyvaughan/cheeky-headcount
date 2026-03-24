@@ -1999,11 +1999,12 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
       const token = await window._clerkGetToken()
       const response = await fetch("https://cheeky-headcount-proxy.vaughan-184.workers.dev/forecast", {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({...})
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1000,
+          messages: [{ role: "user", content: prompt }]
+        })
       });
 
       if (!response.ok) {
