@@ -1996,14 +1996,14 @@ Input mode: ${inputMode}
 
 Distribute hours thoughtfully across operating days, weighting heavier days appropriately. Keep total hours per role close to the rule-engine totals. Return ONLY the narrative then the JSON block.`;
 
+      const token = await window._clerkGetToken()
       const response = await fetch("https://cheeky-headcount-proxy.vaughan-184.workers.dev/forecast", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 1000,
-          messages: [{ role: "user", content: prompt }]
-        })
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({...})
       });
 
       if (!response.ok) {

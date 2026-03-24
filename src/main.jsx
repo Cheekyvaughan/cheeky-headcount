@@ -46,6 +46,7 @@ function StorageInit() {
   useEffect(() => {
     if (isSignedIn && !initDone.current) {
       initDone.current = true
+      window._clerkGetToken = getToken
       // No template arg — Worker accepts the standard Clerk session JWT
       initStorage(getToken)
       setStorageReady(true)
