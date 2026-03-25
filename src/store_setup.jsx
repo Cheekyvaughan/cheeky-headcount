@@ -904,9 +904,9 @@ const STEPS=[
   {id:"timeline",num:2,title:"Store Timeline",sub:"Key dates from handover to opening"},
   {id:"schedule",num:3,title:"Operating Schedule",sub:"Trading hours and calendar exceptions"},
   {id:"seasonality",num:4,title:"Seasonality",sub:"Volume multipliers by season"},
-  {id:"scenarios",num:5,title:"Scenario Matrix",sub:"Define your forecasting scenarios"},
-  {id:"acquisition",num:6,title:"Acquisition Profiles",sub:"Opening-month transaction volumes"},
-  {id:"growth",num:7,title:"Growth Profiles",sub:"Month-on-month growth assumptions"},
+  {id:"acquisition",num:5,title:"Acquisition Profiles",sub:"Opening-month transaction volumes"},
+  {id:"growth",num:6,title:"Growth Profiles",sub:"Month-on-month growth assumptions"},
+  {id:"scenarios",num:7,title:"Scenario Matrix",sub:"Activate scenarios and set the base case"},
 ];
 
 function SetupWizard({store,onUpdate,onComplete,onCancel,onDiscard,isNew,periods}){
