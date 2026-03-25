@@ -1,4 +1,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import * as Tooltip from "@radix-ui/react-tooltip";
+import * as Popover from "@radix-ui/react-popover";
+import * as Dialog from "@radix-ui/react-dialog";
+import * as AlertDialog from "@radix-ui/react-alert-dialog";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 
 // ── Mobile detection ──────────────────────────────────────────────
 function useIsMobile() {
@@ -279,59 +284,193 @@ function SaveBar({dirty,onSave,onClear,saving,isMobile}){
 }
 
 // ── Scenario selector ─────────────────────────────────────────────
-function ScenarioSelector({scenarios,activeId,onSwitch,onCreate,onDelete,onRename,canRename,label="Scenario"}){
-  const[open,setOpen]=useState(false);
-  const[newName,setNewName]=useState("");
-  const[creating,setCreating]=useState(false);
-  const[confirmDelete,setConfirmDelete]=useState(null);
-  const[renamingId,setRenamingId]=useState(null);
-  const[renameVal,setRenameVal]=useState("");
-  const active=scenarios.find(s=>s.id===activeId);
-  const startRename=(s)=>{setRenamingId(s.id);setRenameVal(s.name);setConfirmDelete(null);};
-  const commitRename=(id)=>{if(renameVal.trim()&&onRename)onRename(id,renameVal.trim());setRenamingId(null);};
+// ── Radix shared styles ───────────────────────────────────────────
+const OVERLAY_STYLE = {
+  position:"fixed",inset:0,backgroundColor:"rgba(0,0,0,0.5)",zIndex:2000,
+};
+const MODAL_STYLE = {
+  position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",
+  backgroundColor:CN.white,borderRadius:14,padding:24,
+  maxWidth:380,width:"calc(100% - 40px)",
+  boxShadow:"0 16px 48px rgba(0,0,0,0.2)",zIndex:2001,
+  fontFamily:"'DM Sans',sans-serif",outline:"none",
+};
+
+// Reusable confirmation dialog (destructive or neutral)
+function ConfirmDialog({open,onOpenChange,icon,title,description,confirmLabel="Confirm",onConfirm,destructive}){
   return(
-    <div style={{position:"relative",display:"inline-block"}}>
-      <div style={{display:"flex",alignItems:"center",gap:"6px"}}>
-        <span style={{fontSize:"11px",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",color:CN.mid}}>{label}:</span>
-        <button onClick={()=>setOpen(v=>!v)} style={{display:"flex",alignItems:"center",gap:"8px",padding:"7px 12px",backgroundColor:CN.white,border:`1.5px solid ${CN.orange}`,borderRadius:"8px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:"13px",fontWeight:600,color:CN.dark,minWidth:"160px",justifyContent:"space-between"}}>
-          <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{active?.name||"Select…"}</span>
-          <span style={{fontSize:"10px",color:CN.mid}}>▼</span>
-        </button>
-        {scenarios.length<MAX_SCENARIOS&&<button onClick={()=>setCreating(true)} style={{padding:"7px 10px",backgroundColor:CN.orange,border:"none",borderRadius:"8px",color:CN.white,cursor:"pointer",fontSize:"14px",fontWeight:700,lineHeight:1}}>+</button>}
-      </div>
-      {open&&(<>
-        <div style={{position:"fixed",inset:0,zIndex:200}} onClick={()=>{setOpen(false);setRenamingId(null);}}/>
-        <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,minWidth:"220px",backgroundColor:CN.white,borderRadius:"10px",boxShadow:"0 8px 32px rgba(0,0,0,0.15)",border:`1px solid ${CN.border}`,zIndex:201,overflow:"hidden"}}>
-          {scenarios.map(s=>(
-            <div key={s.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 10px",backgroundColor:s.id===activeId?CN.orangeLight:"transparent",borderBottom:`1px solid ${CN.creamDark}`,gap:"6px"}}>
-              {renamingId===s.id
-                ?<input autoFocus value={renameVal} onChange={e=>setRenameVal(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")commitRename(s.id);if(e.key==="Escape")setRenamingId(null);}} onBlur={()=>commitRename(s.id)} style={{flex:1,fontSize:"13px",fontFamily:"'DM Sans',sans-serif",padding:"2px 6px",borderRadius:4,border:`1.5px solid ${CN.orange}`,outline:"none"}}/>
-                :<button onClick={()=>{onSwitch(s.id);setOpen(false);setRenamingId(null);}} style={{flex:1,textAlign:"left",background:"none",border:"none",cursor:"pointer",fontSize:"13px",fontWeight:s.id===activeId?700:400,color:s.id===activeId?CN.orange:CN.dark,fontFamily:"'DM Sans',sans-serif",padding:0}}>{s.id===activeId?"✓ ":""}{s.name}</button>
-              }
-              <div style={{display:"flex",gap:3,flexShrink:0}}>
-                {renamingId!==s.id&&onRename&&(!canRename||canRename(s.id))&&<button onClick={e=>{e.stopPropagation();startRename(s);}} style={{fontSize:"11px",color:CN.mid,background:"none",border:"none",cursor:"pointer",padding:"2px 4px",borderRadius:4}}>✏️</button>}
-                {scenarios.length>1&&(confirmDelete===s.id
-                  ?<div style={{display:"flex",gap:"4px"}}><button onClick={()=>{onDelete(s.id);setConfirmDelete(null);setOpen(false);}} style={{fontSize:"10px",padding:"2px 6px",backgroundColor:CN.red,color:CN.white,border:"none",borderRadius:"4px",cursor:"pointer"}}>Delete</button><button onClick={()=>setConfirmDelete(null)} style={{fontSize:"10px",padding:"2px 6px",backgroundColor:CN.creamDark,color:CN.mid,border:"none",borderRadius:"4px",cursor:"pointer"}}>Cancel</button></div>
-                  :<button onClick={()=>{setConfirmDelete(s.id);setRenamingId(null);}} style={{fontSize:"11px",color:CN.mid,background:"none",border:"none",cursor:"pointer",padding:"2px 4px",borderRadius:"4px"}}>🗑</button>
-                )}
-              </div>
-            </div>
-          ))}
-          <div style={{padding:"8px",borderTop:`1px solid ${CN.border}`,fontSize:"11px",color:CN.mid,textAlign:"center"}}>{scenarios.length}/{MAX_SCENARIOS} scenarios</div>
-        </div>
-      </>)}
-      {creating&&(
-        <div style={{position:"fixed",inset:0,backgroundColor:"rgba(0,0,0,0.4)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
-          <div style={{backgroundColor:CN.white,borderRadius:"14px",padding:"24px",maxWidth:"340px",width:"100%",boxShadow:"0 16px 48px rgba(0,0,0,0.2)"}}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"18px",color:CN.dark,marginBottom:"16px",textTransform:"uppercase"}}>New Scenario</div>
-            <input autoFocus value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&newName.trim()){onCreate(newName.trim());setNewName("");setCreating(false);}}} placeholder="e.g. Peak Season, Lean Week…" style={{...baseInp,marginBottom:"12px"}}/>
-            <div style={{display:"flex",gap:"8px"}}>
-              <Btn onClick={()=>{if(newName.trim()){onCreate(newName.trim());setNewName("");setCreating(false);}}} style={{opacity:newName.trim()?1:0.4}}>Create</Btn>
-              <Btn variant="secondary" onClick={()=>{setNewName("");setCreating(false);}}>Cancel</Btn>
-            </div>
+    <AlertDialog.Root open={open} onOpenChange={onOpenChange}>
+      <AlertDialog.Portal>
+        <AlertDialog.Overlay style={OVERLAY_STYLE}/>
+        <AlertDialog.Content style={MODAL_STYLE}>
+          {icon&&<div style={{fontSize:28,marginBottom:8}}>{icon}</div>}
+          <AlertDialog.Title style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:CN.dark,marginBottom:8,textTransform:"uppercase",margin:"0 0 8px"}}>{title}</AlertDialog.Title>
+          <AlertDialog.Description asChild>
+            <p style={{fontSize:13,color:CN.mid,marginBottom:20,lineHeight:1.6,margin:"0 0 20px"}}>{description}</p>
+          </AlertDialog.Description>
+          <div style={{display:"flex",gap:8}}>
+            <AlertDialog.Action asChild>
+              <Btn onClick={onConfirm} style={destructive?{backgroundColor:CN.red}:{}}>{confirmLabel}</Btn>
+            </AlertDialog.Action>
+            <AlertDialog.Cancel asChild>
+              <Btn variant="secondary">Cancel</Btn>
+            </AlertDialog.Cancel>
           </div>
-        </div>
+        </AlertDialog.Content>
+      </AlertDialog.Portal>
+    </AlertDialog.Root>
+  );
+}
+
+// Reusable text-input dialog (create / rename)
+function InputDialog({open,onOpenChange,title,placeholder,defaultValue,onConfirm,confirmLabel="Confirm"}){
+  const[value,setValue]=useState(defaultValue||"");
+  useEffect(()=>{if(open)setValue(defaultValue||"");},[open,defaultValue]);
+  const commit=()=>{if(value.trim()){onConfirm(value.trim());onOpenChange(false);}};
+  return(
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay style={{...OVERLAY_STYLE,zIndex:300}}/>
+        <Dialog.Content style={{...MODAL_STYLE,zIndex:301,maxWidth:340}}>
+          <Dialog.Title style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:CN.dark,marginBottom:16,textTransform:"uppercase",margin:"0 0 16px"}}>{title}</Dialog.Title>
+          <input
+            autoFocus value={value}
+            onChange={e=>setValue(e.target.value)}
+            onKeyDown={e=>{if(e.key==="Enter")commit();}}
+            placeholder={placeholder}
+            style={{...baseInp,marginBottom:12}}
+          />
+          <div style={{display:"flex",gap:8}}>
+            <Btn onClick={commit} style={{opacity:value.trim()?1:0.4}}>{confirmLabel}</Btn>
+            <Dialog.Close asChild><Btn variant="secondary">Cancel</Btn></Dialog.Close>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+// Radix Tooltip — replaces hand-rolled InfoTip
+function RTip({source,url}){
+  return(
+    <Tooltip.Root delayDuration={300}>
+      <Tooltip.Trigger asChild>
+        <span style={{cursor:"pointer",fontSize:11,color:CN.blue,fontWeight:700,width:16,height:16,borderRadius:"50%",border:`1px solid ${CN.blue}`,display:"inline-flex",alignItems:"center",justifyContent:"center",lineHeight:1,marginLeft:4,flexShrink:0,verticalAlign:"middle"}}>
+          i
+        </span>
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Content
+          sideOffset={6}
+          style={{
+            backgroundColor:CN.dark,color:CN.white,borderRadius:8,
+            padding:"8px 12px",fontSize:11,zIndex:9999,maxWidth:260,
+            lineHeight:1.5,boxShadow:"0 4px 16px rgba(0,0,0,0.35)",
+            pointerEvents:"none",
+          }}
+        >
+          <div style={{fontWeight:600,marginBottom:4}}>Source</div>
+          <div style={{opacity:0.85,marginBottom:url?6:0}}>{source}</div>
+          {url&&<div style={{color:"#7DD3C8",fontSize:10,wordBreak:"break-all"}}>{url}</div>}
+          <Tooltip.Arrow style={{fill:CN.dark}}/>
+        </Tooltip.Content>
+      </Tooltip.Portal>
+    </Tooltip.Root>
+  );
+}
+
+function ScenarioSelector({scenarios,activeId,onSwitch,onCreate,onDelete,onRename,canRename,label="Scenario"}){
+  const[createOpen,setCreateOpen]=useState(false);
+  const[renameTarget,setRenameTarget]=useState(null);
+  const[deleteTarget,setDeleteTarget]=useState(null);
+  const active=scenarios.find(s=>s.id===activeId);
+
+  const itemHoverStyle=(isActive)=>({
+    display:"flex",alignItems:"center",justifyContent:"space-between",
+    padding:"8px 10px",
+    backgroundColor:isActive?CN.orangeLight:"transparent",
+    borderBottom:`1px solid ${CN.creamDark}`,
+    gap:6,
+    transition:"background 0.1s",
+  });
+
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:6}}>
+      <span style={{fontSize:"11px",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",color:CN.mid}}>{label}:</span>
+
+      <Popover.Root>
+        <Popover.Trigger asChild>
+          <button style={{display:"flex",alignItems:"center",gap:8,padding:"7px 12px",backgroundColor:CN.white,border:`1.5px solid ${CN.orange}`,borderRadius:"8px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:"13px",fontWeight:600,color:CN.dark,minWidth:"160px",justifyContent:"space-between",outline:"none"}}>
+            <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{active?.name||"Select…"}</span>
+            <span style={{fontSize:"10px",color:CN.mid,flexShrink:0}}>▼</span>
+          </button>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content
+            align="start"
+            sideOffset={4}
+            style={{
+              backgroundColor:CN.white,borderRadius:10,
+              boxShadow:"0 8px 32px rgba(0,0,0,0.15)",
+              border:`1px solid ${CN.border}`,
+              minWidth:220,zIndex:201,overflow:"hidden",outline:"none",
+            }}
+          >
+            {scenarios.map(s=>{
+              const isActive=s.id===activeId;
+              const canRen=!canRename||canRename(s.id);
+              return(
+                <div key={s.id} style={itemHoverStyle(isActive)}>
+                  <Popover.Close asChild>
+                    <button onClick={()=>onSwitch(s.id)} style={{flex:1,textAlign:"left",background:"none",border:"none",cursor:"pointer",fontSize:"13px",fontWeight:isActive?700:400,color:isActive?CN.orange:CN.dark,fontFamily:"'DM Sans',sans-serif",padding:0,outline:"none"}}>
+                      {isActive?"✓ ":""}{s.name}
+                    </button>
+                  </Popover.Close>
+                  <div style={{display:"flex",gap:3,flexShrink:0}}>
+                    {onRename&&canRen&&(
+                      <Popover.Close asChild>
+                        <button onClick={()=>setRenameTarget({id:s.id,name:s.name})} style={{fontSize:"11px",color:CN.mid,background:"none",border:"none",cursor:"pointer",padding:"2px 4px",borderRadius:4,lineHeight:1}} title="Rename">✏️</button>
+                      </Popover.Close>
+                    )}
+                    {scenarios.length>1&&(
+                      <Popover.Close asChild>
+                        <button onClick={()=>setDeleteTarget({id:s.id,name:s.name})} style={{fontSize:"11px",color:CN.mid,background:"none",border:"none",cursor:"pointer",padding:"2px 4px",borderRadius:4,lineHeight:1}} title="Delete">🗑</button>
+                      </Popover.Close>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            <div style={{padding:"8px",borderTop:`1px solid ${CN.border}`,fontSize:"11px",color:CN.mid,textAlign:"center"}}>{scenarios.length}/{MAX_SCENARIOS} scenarios</div>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+
+      {scenarios.length<MAX_SCENARIOS&&(
+        <button onClick={()=>setCreateOpen(true)} style={{padding:"7px 10px",backgroundColor:CN.orange,border:"none",borderRadius:"8px",color:CN.white,cursor:"pointer",fontSize:"14px",fontWeight:700,lineHeight:1}}>+</button>
       )}
+
+      <InputDialog
+        open={createOpen} onOpenChange={setCreateOpen}
+        title="New Scenario" placeholder="e.g. Peak Season, Lean Week…"
+        onConfirm={onCreate} confirmLabel="Create"
+      />
+
+      <InputDialog
+        open={!!renameTarget} onOpenChange={v=>!v&&setRenameTarget(null)}
+        title="Rename Scenario" defaultValue={renameTarget?.name}
+        onConfirm={val=>{if(onRename)onRename(renameTarget.id,val);}}
+        confirmLabel="Rename"
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget} onOpenChange={v=>!v&&setDeleteTarget(null)}
+        icon="🗑" title="Delete Scenario"
+        description={<>Permanently delete <strong>"{deleteTarget?.name}"</strong>? This cannot be undone.</>}
+        confirmLabel="Delete"
+        onConfirm={()=>{onDelete(deleteTarget.id);setDeleteTarget(null);}}
+        destructive
+      />
     </div>
   );
 }
@@ -453,23 +592,29 @@ function RolesTab({roleScenarios,setRoleScenarios,taxYears,ot,dirty,onSave,onCle
   const updateRoles=(fn)=>setRoleScenarios(prev=>({...prev,scenarios:prev.scenarios.map(s=>s.id===prev.activeId?{...s,roles:fn(s.roles)}:s)}));
   const saveRole=(role)=>{updateRoles(rs=>rs.find(r=>r.id===role.id)?rs.map(r=>r.id===role.id?role:r):[...rs,role]);setAdding(false);setEditing(null);};
   const toggle=(id)=>updateRoles(rs=>rs.map(r=>r.id===id?{...r,active:!r.active}:r));
-  const remove=(id)=>{if(window.confirm("Remove this role?"))updateRoles(rs=>rs.filter(r=>r.id!==id));};
+  const[confirmRemoveId,setConfirmRemoveId]=useState(null);
+  const remove=(id)=>setConfirmRemoveId(id);
   const grouped=CATEGORIES.reduce((a,c)=>{a[c]=roles.filter(r=>r.category===c);return a;},{});
   const handleCreateScenario=(name)=>{const newS=makeRoleScenario(name,[]);setRoleScenarios(prev=>({scenarios:[...prev.scenarios,newS],activeId:newS.id}));};
   const handleDeleteScenario=(id)=>setRoleScenarios(prev=>{const remaining=prev.scenarios.filter(s=>s.id!==id);return{scenarios:remaining,activeId:prev.activeId===id?remaining[0]?.id||null:prev.activeId};});
   const copyDefaultToNew=()=>{const name=`Custom — ${new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"})}`;const newS=makeRoleScenario(name,roles,false);setRoleScenarios(prev=>({scenarios:[...prev.scenarios,newS],activeId:newS.id}));};
   return(
     <div>
-      {adminSaveConfirm&&(
-        <div style={{position:"fixed",inset:0,backgroundColor:"rgba(0,0,0,0.5)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{backgroundColor:CN.white,borderRadius:14,padding:24,maxWidth:380,width:"100%",boxShadow:"0 16px 48px rgba(0,0,0,0.2)"}}>
-            <div style={{fontSize:28,marginBottom:8}}>⚠️</div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:CN.dark,marginBottom:8,textTransform:"uppercase"}}>Save Default Roles</div>
-            <p style={{fontSize:13,color:CN.mid,marginBottom:20,lineHeight:1.6}}>Saving changes to the <strong>Default</strong> scenario affects all users. Continue?</p>
-            <div style={{display:"flex",gap:8}}><Btn onClick={()=>{onSave();setAdminSaveConfirm(false);}}>Confirm Save</Btn><Btn variant="secondary" onClick={()=>setAdminSaveConfirm(false)}>Cancel</Btn></div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={adminSaveConfirm} onOpenChange={setAdminSaveConfirm}
+        icon="⚠️" title="Save Default Roles"
+        description={<>Saving changes to the <strong>Default</strong> scenario affects all users who haven't created a custom scenario. Continue?</>}
+        confirmLabel="Confirm Save"
+        onConfirm={()=>{onSave();setAdminSaveConfirm(false);}}
+      />
+      <ConfirmDialog
+        open={!!confirmRemoveId} onOpenChange={v=>!v&&setConfirmRemoveId(null)}
+        icon="🗑" title="Remove Role"
+        description="Remove this role from the scenario? This cannot be undone."
+        confirmLabel="Remove"
+        onConfirm={()=>{updateRoles(rs=>rs.filter(r=>r.id!==confirmRemoveId));setConfirmRemoveId(null);}}
+        destructive
+      />
       <PageHeader
         title="Job Roles"
         subtitle="Define roles and pay rates per scenario"
@@ -567,16 +712,13 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
   const copyDefaultToNew=()=>{const name=`Custom — ${new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"})}`;const newS=makePlanScenario(name,linkedRoleScenarioId||null,false);newS.plans=(activePlanScenario?.plans||[]).map(p=>({...p,id:uid()}));setPlanScenarios(prev=>({scenarios:[...prev.scenarios,newS],activeId:newS.id}));};
   return(
     <div>
-      {adminSaveConfirm&&(
-        <div style={{position:"fixed",inset:0,backgroundColor:"rgba(0,0,0,0.5)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{backgroundColor:CN.white,borderRadius:14,padding:24,maxWidth:380,width:"100%",boxShadow:"0 16px 48px rgba(0,0,0,0.2)"}}>
-            <div style={{fontSize:28,marginBottom:8}}>⚠️</div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:CN.dark,marginBottom:8,textTransform:"uppercase"}}>Save Default Schedule</div>
-            <p style={{fontSize:13,color:CN.mid,marginBottom:20,lineHeight:1.6}}>Saving the <strong>Default</strong> schedule affects all users. Continue?</p>
-            <div style={{display:"flex",gap:8}}><Btn onClick={()=>{onSave();setAdminSaveConfirm(false);}}>Confirm Save</Btn><Btn variant="secondary" onClick={()=>setAdminSaveConfirm(false)}>Cancel</Btn></div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={adminSaveConfirm} onOpenChange={setAdminSaveConfirm}
+        icon="⚠️" title="Save Default Schedule"
+        description={<>Saving the <strong>Default</strong> schedule affects all users. Continue?</>}
+        confirmLabel="Confirm Save"
+        onConfirm={()=>{onSave();setAdminSaveConfirm(false);}}
+      />
       <PageHeader
         title="Weekly Schedule"
         subtitle="Enter hours per employee per day"
@@ -1152,16 +1294,14 @@ function AdminTab({currentUser,allUsers,admins,onPromote,onDemote,onRefresh,isMo
           </Card>
         );
       })}
-      {confirmDelete&&(
-        <div style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.5)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-          <div style={{backgroundColor:CN.white,borderRadius:14,padding:24,maxWidth:360,width:'100%',boxShadow:'0 16px 48px rgba(0,0,0,0.2)'}}>
-            <div style={{fontSize:28,marginBottom:8}}>🗑</div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:CN.dark,marginBottom:8,textTransform:'uppercase'}}>Delete Scenario</div>
-            <p style={{fontSize:13,color:CN.mid,marginBottom:20,lineHeight:1.6}}>Permanently delete <strong>"{confirmDelete.name}"</strong>? Cannot be undone.</p>
-            <div style={{display:'flex',gap:8}}><Btn onClick={handleDelete} style={{backgroundColor:CN.red}}>Delete</Btn><Btn variant="secondary" onClick={()=>setConfirmDelete(null)}>Cancel</Btn></div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={!!confirmDelete} onOpenChange={v=>!v&&setConfirmDelete(null)}
+        icon="🗑" title="Delete Scenario"
+        description={<>Permanently delete <strong>"{confirmDelete?.name}"</strong>? Cannot be undone.</>}
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+        destructive
+      />
     </div>
   );
 }
@@ -1214,17 +1354,6 @@ function distributeWeighted(totalHrs,inputs){
   const totalWeight=operatingDays.reduce((s,d)=>s+(weights[d]||1.0),0);
   return Object.fromEntries(DAYS.map(d=>{if(inputs.days[d]?.closed||!operatingDays.includes(d))return[d,0];return[d,Math.round((totalHrs*(weights[d]/totalWeight))*2)/2];}));
 }
-function InfoTip({url,source}){
-  const[show,setShow]=useState(false);const ref=useRef(null);const[tipStyle,setTipStyle]=useState({});
-  const handleEnter=()=>{if(ref.current){const r=ref.current.getBoundingClientRect();setTipStyle({position:"fixed",top:r.top-8,left:r.left+r.width/2,transform:"translate(-50%, -100%)"});}setShow(true);};
-  return(
-    <span style={{position:"relative",display:"inline-block",marginLeft:4}}>
-      <span ref={ref} onMouseEnter={handleEnter} onMouseLeave={()=>setShow(false)} style={{cursor:"pointer",fontSize:11,color:CN.blue,fontWeight:700,width:16,height:16,borderRadius:"50%",border:`1px solid ${CN.blue}`,display:"inline-flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>i</span>
-      {show&&<div style={{...tipStyle,backgroundColor:CN.dark,color:CN.white,borderRadius:8,padding:"8px 12px",fontSize:11,zIndex:9999,width:260,whiteSpace:"normal",boxShadow:"0 4px 16px rgba(0,0,0,0.35)",pointerEvents:"none"}}><div style={{fontWeight:600,marginBottom:4}}>Source</div><div style={{opacity:0.85,marginBottom:6}}>{source}</div><div style={{color:"#7DD3C8",fontSize:10,wordBreak:"break-all"}}>{url}</div></div>}
-    </span>
-  );
-}
-
 function ForecasterTab({roleScenarios,setRoleScenarios,planScenarios,setPlanScenarios,taxYears,ot,isMobile,onAccepted}){
   const currentYear=new Date().getFullYear();
   const tax=taxYears?.[currentYear]||DEFAULT_TAX;
@@ -1461,16 +1590,16 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:520}}>
                 <thead><tr style={{backgroundColor:CN.creamDark}}>
                   <th style={{padding:"8px 10px",textAlign:"left",fontWeight:700,color:CN.mid,fontSize:11}}>Role</th>
-                  <th style={{padding:"8px 10px",fontWeight:700,color:CN.mid,fontSize:11}}>Rev/hr ($)<InfoTip source={getBenchmark("default").source} url={getBenchmark("default").sourceUrl}/></th>
-                  <th style={{padding:"8px 10px",fontWeight:700,color:CN.mid,fontSize:11}}>Covers/hr<InfoTip source="Cornell Hospitality Quarterly" url="https://journals.sagepub.com/home/cqx"/></th>
-                  <th style={{padding:"8px 10px",fontWeight:700,color:CN.mid,fontSize:11}}>Floor<InfoTip source="Min coverage — 1 person must be present when open" url="https://restaurant.org/"/></th>
+                  <th style={{padding:"8px 10px",fontWeight:700,color:CN.mid,fontSize:11}}>Rev/hr ($)<RTip source={getBenchmark("default").source} url={getBenchmark("default").sourceUrl}/></th>
+                  <th style={{padding:"8px 10px",fontWeight:700,color:CN.mid,fontSize:11}}>Covers/hr<RTip source="Cornell Hospitality Quarterly" url="https://journals.sagepub.com/home/cqx"/></th>
+                  <th style={{padding:"8px 10px",fontWeight:700,color:CN.mid,fontSize:11}}>Floor<RTip source="Min coverage — 1 person must be present when open" url="https://restaurant.org/"/></th>
                 </tr></thead>
                 <tbody>
                   {localRoles.map((r,i)=>{const a=assumptions[r.id]||getBenchmark(r.name);const bench=getBenchmark(r.name);return(
                     <tr key={r.id} style={{backgroundColor:i%2===0?CN.white:CN.cream}}>
                       <td style={{padding:"7px 10px"}}><div style={{fontWeight:600,color:CN.dark}}>{r.name}</div><div style={{fontSize:10,color:CN.mid}}>{r.category} · ${r.rate}/hr</div></td>
-                      <td style={{padding:"4px 8px"}}><div style={{display:"flex",alignItems:"center",gap:4}}><input type="number" min={0} value={a.revenuePerHr??""} placeholder="n/a" onChange={e=>setAssumption(r.id,"revenuePerHr",e.target.value===""?null:e.target.value)} style={{...inputStyle,width:80}}/><InfoTip source={bench.source} url={bench.sourceUrl}/></div></td>
-                      <td style={{padding:"4px 8px"}}><div style={{display:"flex",alignItems:"center",gap:4}}><input type="number" min={0} value={a.coversPerHr??""} placeholder="n/a" onChange={e=>setAssumption(r.id,"coversPerHr",e.target.value===""?null:e.target.value)} style={{...inputStyle,width:80}}/><InfoTip source={bench.source} url={bench.sourceUrl}/></div></td>
+                      <td style={{padding:"4px 8px"}}><div style={{display:"flex",alignItems:"center",gap:4}}><input type="number" min={0} value={a.revenuePerHr??""} placeholder="n/a" onChange={e=>setAssumption(r.id,"revenuePerHr",e.target.value===""?null:e.target.value)} style={{...inputStyle,width:80}}/><RTip source={bench.source} url={bench.sourceUrl}/></div></td>
+                      <td style={{padding:"4px 8px"}}><div style={{display:"flex",alignItems:"center",gap:4}}><input type="number" min={0} value={a.coversPerHr??""} placeholder="n/a" onChange={e=>setAssumption(r.id,"coversPerHr",e.target.value===""?null:e.target.value)} style={{...inputStyle,width:80}}/><RTip source={bench.source} url={bench.sourceUrl}/></div></td>
                       <td style={{padding:"4px 8px"}}><input type="number" min={0} max={5} value={a.floor} onChange={e=>setAssumption(r.id,"floor",e.target.value)} style={{...inputStyle,width:60}}/></td>
                     </tr>
                   );})}
@@ -1597,9 +1726,11 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
 // ── Sidebar ───────────────────────────────────────────────────────
 const SIDEBAR_W=220;
 
-function Sidebar({tab,setTab,navGroups,currentUser,onSignOut,logoUrl,setLogoUrl,isAdmin,actingAsUser,setActingAsUser,setTab:_,tabSwitcher,isMobile,open,onClose,showSystemTools,setShowSystemTools,tabIcons,setTabIcons}){
-  const[userMenuOpen,setUserMenuOpen]=useState(false);
+function Sidebar({tab,navGroups,currentUser,logoUrl,setLogoUrl,isAdmin,actingAsUser,setActingAsUser,tabSwitcher,isMobile,open,onClose,tabIcons,setTabIcons}){
   const sb={position:"fixed",top:0,left:0,bottom:0,width:SIDEBAR_W,backgroundColor:CN.sidebarBg,display:"flex",flexDirection:"column",zIndex:300,transition:"transform 0.25s ease",transform:isMobile?(open?"translateX(0)":"translateX(-100%)"):"translateX(0)",boxShadow:isMobile&&open?"4px 0 24px rgba(0,0,0,0.4)":undefined,overflowY:"auto"};
+
+  const sidebarBtnBase={display:"flex",alignItems:"center",gap:10,width:"100%",padding:"9px 16px",border:"none",background:"transparent",color:CN.sidebarText,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif",textAlign:"left",outline:"none",transition:"background 0.1s"};
+
   return(
     <>
       {isMobile&&open&&<div onClick={onClose} style={{position:"fixed",inset:0,backgroundColor:"rgba(0,0,0,0.5)",zIndex:299}}/>}
@@ -1627,7 +1758,7 @@ function Sidebar({tab,setTab,navGroups,currentUser,onSignOut,logoUrl,setLogoUrl,
                 const active=tab===item.id;
                 return(
                   <button key={item.id} onClick={()=>{tabSwitcher(item.id);if(isMobile)onClose();}}
-                    style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"9px 16px",border:"none",background:active?CN.sidebarActive:"transparent",color:active?"rgba(255,255,255,1)":CN.sidebarText,cursor:"pointer",fontSize:13,fontWeight:active?700:400,fontFamily:"'DM Sans',sans-serif",textAlign:"left",position:"relative",transition:"all 0.15s",borderLeft:active?`3px solid ${CN.orange}`:"3px solid transparent"}}>
+                    style={{...sidebarBtnBase,fontSize:13,fontWeight:active?700:400,background:active?CN.sidebarActive:"transparent",color:active?"rgba(255,255,255,1)":CN.sidebarText,borderLeft:active?`3px solid ${CN.orange}`:"3px solid transparent",padding:"9px 16px"}}>
                     <span style={{fontSize:15,flexShrink:0}}>{item.icon}</span>
                     <span style={{flex:1}}>{item.label}</span>
                     {item.dirty&&<span style={{width:6,height:6,borderRadius:"50%",backgroundColor:CN.orange,flexShrink:0}}/>}
@@ -1641,69 +1772,126 @@ function Sidebar({tab,setTab,navGroups,currentUser,onSignOut,logoUrl,setLogoUrl,
 
         {/* Bottom area */}
         <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",padding:"8px 0"}}>
-          {/* Admin toggle */}
+
+          {/* Admin view toggle */}
           {isAdmin&&(
-            <button onClick={()=>{setActingAsUser(v=>!v);if(tab==="admin")tabSwitcher("summary");}} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"9px 16px",border:"none",background:"transparent",color:CN.sidebarText,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif",textAlign:"left"}}>
-              <span style={{fontSize:14}}>{isAdmin&&!actingAsUser?"🔐":"👤"}</span>
-              <span>{isAdmin&&!actingAsUser?"Admin view":"User view"}</span>
+            <button onClick={()=>{setActingAsUser(v=>!v);if(tab==="admin")tabSwitcher("summary");}} style={sidebarBtnBase}>
+              <span style={{fontSize:14}}>{!actingAsUser?"🔐":"👤"}</span>
+              <span>{!actingAsUser?"Admin view":"User view"}</span>
             </button>
           )}
-          {/* System tools */}
-          <div style={{position:"relative"}}>
-            <button onClick={()=>setShowSystemTools(v=>!v)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"9px 16px",border:"none",background:showSystemTools?"rgba(255,255,255,0.06)":"transparent",color:CN.sidebarText,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif",textAlign:"left"}}>
-              <span style={{fontSize:14}}>⚙️</span><span>System Tools</span>
-            </button>
-            {showSystemTools&&(
-              <>
-                <div style={{position:"fixed",inset:0,zIndex:400}} onClick={()=>setShowSystemTools(false)}/>
-                <div style={{position:"fixed",bottom:120,left:SIDEBAR_W+8,width:300,backgroundColor:CN.white,borderRadius:12,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",border:`1px solid ${CN.border}`,zIndex:401,overflow:"hidden"}}>
-                  <div style={{padding:"11px 16px",backgroundColor:CN.creamDark,borderBottom:`1px solid ${CN.border}`,fontWeight:700,fontSize:13,color:CN.dark}}>⚙️ System Tools</div>
-                  <div style={{padding:"14px 16px",borderBottom:`1px solid ${CN.border}`}}>
-                    <div style={{fontSize:"11px",fontWeight:600,color:CN.mid,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.05em"}}>Logo</div>
-                    <div style={{display:"flex",alignItems:"center",gap:10}}>
-                      <div style={{width:44,height:44,borderRadius:6,border:`1px solid ${CN.border}`,overflow:"hidden",backgroundColor:CN.creamDark,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{logoUrl?<img src={logoUrl} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}}/>:<span style={{fontSize:"20px",opacity:0.4}}>🏢</span>}</div>
-                      <div style={{flex:1}}>
-                        <button onClick={()=>document.getElementById("cn-logo-upload").click()} style={{fontSize:"12px",padding:"5px 10px",borderRadius:6,border:`1px solid ${CN.border}`,backgroundColor:CN.white,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",color:CN.dark,display:"block",width:"100%",marginBottom:4}}>{logoUrl?"Replace logo":"Upload logo"}</button>
-                        {logoUrl&&<button onClick={()=>setLogoUrl(null)} style={{fontSize:"11px",padding:"4px 10px",borderRadius:6,border:`1px solid ${CN.border}`,backgroundColor:CN.white,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",color:CN.red,display:"block",width:"100%"}}>Remove logo</button>}
-                      </div>
+
+          {/* System tools — Radix Popover */}
+          <Popover.Root>
+            <Popover.Trigger asChild>
+              <button style={sidebarBtnBase}>
+                <span style={{fontSize:14}}>⚙️</span>
+                <span>System Tools</span>
+              </button>
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                side="right" align="end" sideOffset={8}
+                style={{
+                  width:300,backgroundColor:CN.white,borderRadius:12,
+                  boxShadow:"0 8px 32px rgba(0,0,0,0.2)",border:`1px solid ${CN.border}`,
+                  overflow:"hidden",outline:"none",zIndex:500,
+                  fontFamily:"'DM Sans',sans-serif",
+                }}
+              >
+                <div style={{padding:"11px 16px",backgroundColor:CN.creamDark,borderBottom:`1px solid ${CN.border}`,fontWeight:700,fontSize:13,color:CN.dark}}>⚙️ System Tools</div>
+
+                {/* Logo section */}
+                <div style={{padding:"14px 16px",borderBottom:`1px solid ${CN.border}`}}>
+                  <div style={{fontSize:11,fontWeight:600,color:CN.mid,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.05em"}}>Logo</div>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{width:44,height:44,borderRadius:6,border:`1px solid ${CN.border}`,overflow:"hidden",backgroundColor:CN.creamDark,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      {logoUrl?<img src={logoUrl} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}}/>:<span style={{fontSize:20,opacity:0.4}}>🏢</span>}
+                    </div>
+                    <div style={{flex:1}}>
+                      <button onClick={()=>document.getElementById("cn-logo-upload").click()} style={{fontSize:12,padding:"5px 10px",borderRadius:6,border:`1px solid ${CN.border}`,backgroundColor:CN.white,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",color:CN.dark,display:"block",width:"100%",marginBottom:4}}>
+                        {logoUrl?"Replace logo":"Upload logo"}
+                      </button>
+                      {logoUrl&&(
+                        <button onClick={()=>setLogoUrl(null)} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:`1px solid ${CN.border}`,backgroundColor:CN.white,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",color:CN.red,display:"block",width:"100%"}}>Remove logo</button>
+                      )}
                     </div>
                   </div>
-                  <div style={{padding:"14px 16px"}}>
-                    <div style={{fontSize:"11px",fontWeight:600,color:CN.mid,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.05em"}}>Tab Icons</div>
-                    {[{id:"roles",label:"Job Roles",options:["👥","👤","🧑‍💼","👷","🧑‍🍳"]},{id:"plan",label:"Schedule",options:["📋","📅","🗓️","📆","🗒️"]},{id:"summary",label:"Summary",options:["📊","📈","💰","🧾","📉"]}].map(row=>(
-                      <div key={row.id} style={{marginBottom:10}}>
-                        <div style={{fontSize:"12px",color:CN.dark,marginBottom:5,fontWeight:500}}>{row.label}</div>
-                        <div style={{display:"flex",gap:4}}>{row.options.map(icon=><button key={icon} onClick={()=>setTabIcons(prev=>({...prev,[row.id]:icon}))} style={{fontSize:"17px",padding:"4px 7px",borderRadius:6,border:tabIcons[row.id]===icon?`2px solid ${CN.orange}`:"2px solid transparent",backgroundColor:tabIcons[row.id]===icon?CN.orangeLight:"transparent",cursor:"pointer"}}>{icon}</button>)}</div>
-                      </div>
-                    ))}
-                  </div>
                 </div>
-              </>
-            )}
-          </div>
-          {/* User */}
-          <div style={{position:"relative"}}>
-            <button onClick={()=>setUserMenuOpen(v=>!v)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 16px",border:"none",background:userMenuOpen?"rgba(255,255,255,0.06)":"transparent",color:CN.white,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left",borderTop:"1px solid rgba(255,255,255,0.07)"}}>
-              {currentUser?.avatar?<img src={currentUser.avatar} alt="" style={{width:28,height:28,borderRadius:"50%",objectFit:"cover",flexShrink:0}}/>:<div style={{width:28,height:28,borderRadius:"50%",backgroundColor:CN.orange,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13,flexShrink:0}}>{(currentUser?.name?.[0]||"?").toUpperCase()}</div>}
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentUser?.name}</div>
-                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentUser?.email}</div>
-              </div>
-              <span style={{fontSize:9,opacity:0.5}}>▲</span>
-            </button>
-            {userMenuOpen&&(
-              <>
-                <div style={{position:"fixed",inset:0,zIndex:400}} onClick={()=>setUserMenuOpen(false)}/>
-                <div style={{position:"fixed",bottom:70,left:8,width:SIDEBAR_W-16,backgroundColor:CN.white,border:`1px solid ${CN.border}`,borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,0.15)",zIndex:401,overflow:"hidden"}}>
+
+                {/* Tab icons section */}
+                <div style={{padding:"14px 16px"}}>
+                  <div style={{fontSize:11,fontWeight:600,color:CN.mid,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.05em"}}>Tab Icons</div>
+                  {[
+                    {id:"roles", label:"Job Roles",  options:["👥","👤","🧑‍💼","👷","🧑‍🍳"]},
+                    {id:"plan",  label:"Schedule",   options:["📋","📅","🗓️","📆","🗒️"]},
+                    {id:"summary",label:"Summary",   options:["📊","📈","💰","🧾","📉"]},
+                  ].map(row=>(
+                    <div key={row.id} style={{marginBottom:10}}>
+                      <div style={{fontSize:12,color:CN.dark,marginBottom:5,fontWeight:500}}>{row.label}</div>
+                      <div style={{display:"flex",gap:4}}>
+                        {row.options.map(icon=>(
+                          <button key={icon} onClick={()=>setTabIcons(prev=>({...prev,[row.id]:icon}))}
+                            style={{fontSize:17,padding:"4px 7px",borderRadius:6,cursor:"pointer",border:tabIcons[row.id]===icon?`2px solid ${CN.orange}`:"2px solid transparent",backgroundColor:tabIcons[row.id]===icon?CN.orangeLight:"transparent"}}>
+                            {icon}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Popover.Arrow style={{fill:CN.border}}/>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+
+          {/* User menu — Radix DropdownMenu */}
+          <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",marginTop:4}}>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <button style={{...sidebarBtnBase,color:CN.white,padding:"10px 16px",width:"100%"}}>
+                  {currentUser?.avatar
+                    ?<img src={currentUser.avatar} alt="" style={{width:28,height:28,borderRadius:"50%",objectFit:"cover",flexShrink:0}}/>
+                    :<div style={{width:28,height:28,borderRadius:"50%",backgroundColor:CN.orange,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13,flexShrink:0}}>{(currentUser?.name?.[0]||"?").toUpperCase()}</div>
+                  }
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentUser?.name}</div>
+                    <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentUser?.email}</div>
+                  </div>
+                  <span style={{fontSize:9,opacity:0.5,flexShrink:0}}>▲</span>
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  side="right" align="end" sideOffset={8}
+                  style={{
+                    width:SIDEBAR_W-16,backgroundColor:CN.white,
+                    border:`1px solid ${CN.border}`,borderRadius:10,
+                    boxShadow:"0 8px 24px rgba(0,0,0,0.15)",
+                    overflow:"hidden",outline:"none",zIndex:500,
+                    fontFamily:"'DM Sans',sans-serif",
+                  }}
+                >
                   <div style={{padding:"10px 12px",borderBottom:`1px solid ${CN.border}`,backgroundColor:CN.creamDark}}>
                     <div style={{fontSize:13,fontWeight:600,color:CN.dark}}>{currentUser?.name}</div>
                     <div style={{fontSize:11,color:CN.mid}}>{currentUser?.email}</div>
                   </div>
-                  <button onClick={()=>window.Clerk?.signOut()} style={{display:"block",width:"100%",padding:"10px 12px",background:"none",border:"none",textAlign:"left",fontSize:13,fontWeight:600,color:CN.red,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}} onMouseEnter={e=>e.currentTarget.style.background="#FEE2E2"} onMouseLeave={e=>e.currentTarget.style.background="none"}>Sign out</button>
-                </div>
-              </>
-            )}
+                  <DropdownMenu.Item asChild>
+                    <button
+                      onClick={()=>window.Clerk?.signOut()}
+                      style={{display:"block",width:"100%",padding:"10px 12px",background:"none",border:"none",textAlign:"left",fontSize:13,fontWeight:600,color:CN.red,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",outline:"none"}}
+                      onMouseEnter={e=>e.currentTarget.style.background="#FEE2E2"}
+                      onMouseLeave={e=>e.currentTarget.style.background="none"}
+                    >
+                      Sign out
+                    </button>
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Arrow style={{fill:CN.border}}/>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
           </div>
+
         </div>
       </div>
     </>
@@ -1730,7 +1918,6 @@ export default function App({currentUser}){
   const SK=useMemo(()=>userSK(currentUser.id),[currentUser.id]);
   const loadDone=useRef(false);
   const[sidebarOpen,setSidebarOpen]=useState(false);
-  const[showSystemTools,setShowSystemTools]=useState(false);
 
   const[roleScenarios,setRoleScenarios]=useState(null);
   const[planScenarios,setPlanScenarios]=useState(null);
@@ -1862,14 +2049,14 @@ export default function App({currentUser}){
   const innerPad={maxWidth:1100,margin:"0 auto",padding:isMobile?"16px 12px":"32px 32px"};
 
   return(
+    <Tooltip.Provider delayDuration={300}>
     <div style={{display:"flex",minHeight:"100vh",backgroundColor:CN.sidebarBg}}>
       <Sidebar
-        tab={tab} setTab={setTab} navGroups={navGroups}
+        tab={tab} navGroups={navGroups}
         currentUser={currentUser}
         isAdmin={isAdmin} actingAsUser={actingAsUser} setActingAsUser={setActingAsUser}
         logoUrl={logoUrl} setLogoUrl={setLogoUrl}
         tabSwitcher={tabSwitcher} isMobile={isMobile} open={sidebarOpen} onClose={()=>setSidebarOpen(false)}
-        showSystemTools={showSystemTools} setShowSystemTools={setShowSystemTools}
         tabIcons={tabIcons} setTabIcons={setTabIcons}
       />
 
@@ -1894,5 +2081,6 @@ export default function App({currentUser}){
         </div>
       </div>
     </div>
+    </Tooltip.Provider>
   );
 }
