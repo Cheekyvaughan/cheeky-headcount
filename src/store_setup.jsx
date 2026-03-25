@@ -800,7 +800,7 @@ const STEPS=[
   {id:"growth",num:7,title:"Growth Profiles",sub:"Month-on-month growth assumptions"},
 ];
 
-function SetupWizard({store,onUpdate,onComplete,onCancel,periods}){
+function SetupWizard({store,onUpdate,onComplete,onCancel,onDiscard,periods}){
   const[step,setStep]=useState(0);
   const cur=STEPS[step],isLast=step===STEPS.length-1,canNext=isSectionComplete(store,cur.id);
   const goNext=()=>isLast?onComplete():setStep(s=>s+1);
@@ -846,6 +846,7 @@ function SetupWizard({store,onUpdate,onComplete,onCancel,periods}){
         <div style={{padding:"16px 28px",borderTop:`1.5px solid ${CN.border}`,backgroundColor:CN.white,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
           <div style={{display:"flex",gap:10}}>
             {onCancel&&<Btn variant="secondary" onClick={onCancel}>Save & Exit</Btn>}
+            {onDiscard&&<Btn variant="secondary" onClick={onDiscard}>Cancel</Btn>}
             {step>0&&<Btn variant="secondary" onClick={()=>setStep(s=>s-1)}>← Back</Btn>}
           </div>
           <Btn onClick={goNext} disabled={!canNext}>{isLast?"Complete Setup ✓":`Next: ${STEPS[step+1]?.title} →`}</Btn>
@@ -907,13 +908,14 @@ export function StoreSetupTab({stores,setStores,activeStoreId,setActiveStoreId,p
   const deleteStore=(id)=>setStores(prev=>{const r=prev.filter(s=>s.id!==id);if(activeStoreId===id&&r.length>0)setActiveStoreId(r[0].id);return r;});
   const completeWizard=()=>{if(!wizardStore)return;const c={...wizardStore,setupComplete:true};if(isNew){setStores(p=>[...p,c]);setActiveStoreId(c.id);}else setStores(p=>p.map(s=>s.id===c.id?c:s));setShowWizard(false);setWizardStore(null);setIsNew(false);setTimeout(()=>onSave?.(),100);};
   const exitWizard=()=>{if(!wizardStore){setShowWizard(false);return;}if(isNew){setStores(p=>[...p,{...wizardStore,setupComplete:false}]);setActiveStoreId(wizardStore.id);}else setStores(p=>p.map(s=>s.id===wizardStore.id?{...wizardStore,setupComplete:false}:s));setShowWizard(false);setWizardStore(null);setTimeout(()=>onSave?.(),100);};
+  const discardWizard=()=>{setShowWizard(false);setWizardStore(null);};
 
   const dirty=JSON.stringify(stores)!==JSON.stringify(savedStores);
   const sections=STEPS.map(ws=>({...ws,complete:isSectionComplete(active,ws.id),locked:!canAccess(active,ws.id)}));
 
   return(
     <div>
-      {showWizard&&wizardStore&&<SetupWizard store={wizardStore} onUpdate={setWizardStore} onComplete={completeWizard} onCancel={exitWizard} periods={periods}/>}
+      {showWizard&&wizardStore&&<SetupWizard store={wizardStore} onUpdate={setWizardStore} onComplete={completeWizard} onCancel={exitWizard} onDiscard={discardWizard} periods={periods}/>}
       {/* Header */}
       <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:24,paddingBottom:20,borderBottom:`1.5px solid ${CN.border}`,flexWrap:"wrap",gap:12}}>
         <div>
