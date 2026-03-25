@@ -1077,9 +1077,9 @@ export function StoreSetupTab({stores,setStores,activeStoreId,setActiveStoreId,p
           </div>
         </SectionCard>
         <SectionCard num={4} title="Seasonality Multipliers" subtitle="Volume adjustments by season, calibrated with AI" complete={sections[3].complete} locked={sections[3].locked}><SecSeasonality store={active} onChange={updateActive}/></SectionCard>
-        <SectionCard num={5} title="Scenario Matrix" subtitle="Activation and base scenario for forecasting" complete={sections[4].complete} locked={sections[4].locked}><SecScenarios store={active} onChange={updateActive}/></SectionCard>
-        <SectionCard num={6} title="Acquisition Profiles" subtitle="Opening transaction volumes by scenario" complete={sections[5].complete} locked={sections[5].locked}><SecAcquisition store={active} onChange={updateActive}/></SectionCard>
-        <SectionCard num={7} title="Growth Profiles" subtitle="Month-on-month transaction growth assumptions" complete={sections[6].complete} locked={sections[6].locked}><SecGrowth store={active} onChange={updateActive}/></SectionCard>
+        <SectionCard num={5} title="Acquisition Profiles" subtitle="Opening transaction volumes by scenario" complete={sections[4].complete} locked={sections[4].locked}><SecAcquisition store={active} onChange={updateActive}/></SectionCard>
+        <SectionCard num={6} title="Growth Profiles" subtitle="Month-on-month transaction growth assumptions" complete={sections[5].complete} locked={sections[5].locked}><SecGrowth store={active} onChange={updateActive}/></SectionCard>
+        <SectionCard num={7} title="Scenario Matrix" subtitle="Activation and base scenario for forecasting" complete={sections[6].complete} locked={sections[6].locked}><SecScenarios store={active} onChange={updateActive}/></SectionCard>
         {SECTIONS.every(s=>isSectionComplete(active,s))&&<InfoBox type="success">✓ All sections complete. <strong>{active.name}</strong> is ready for revenue forecasting.</InfoBox>}
       </>)}
       {/* Save bar */}
