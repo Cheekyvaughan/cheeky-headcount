@@ -4,7 +4,7 @@ import * as Popover from "@radix-ui/react-popover";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ForecastSetupTab, DEFAULT_FORECAST_SETUP } from "./forecast_setup.jsx";
+import { StoreSetupTab, DEFAULT_STORE, DEFAULT_PERIODS, AdminPeriodSetup } from "./store_setup.jsx";
 
 // ── Mobile detection ──────────────────────────────────────────────
 function useIsMobile() {
@@ -84,7 +84,9 @@ const SHARED_SK = {
   icons: "cn-hc-tab-icons-v1",
   userRegistry: "cn-hc-user-registry-v1",
   admins: "cn-hc-admins-v1",
-  forecastSetup: "cn-forecast-setup-v1",
+  stores: "cn-stores-v1",
+  periods: "cn-periods-v1",
+  forecastSetup: "cn-forecast-setup-v1", // legacy, still loaded for migration
 };
 
 function uid() { return Math.random().toString(36).slice(2,9) + Date.now().toString(36); }
@@ -1207,7 +1209,14 @@ function TaxTab({taxYears,setTaxYears,selectedYear,setSelectedYear,ot,setOt,dirt
 }
 
 // ── Admin Tab ─────────────────────────────────────────────────────
-function AdminTab({currentUser,allUsers,admins,onPromote,onDemote,onRefresh,isMobile}){
+function AdminTab({currentUser,allUsers,admins,onPromote,onDemote,onRefresh,isMobile,periods,onSavePeriods}){
+  const [localMonths, setLocalMonths] = useState(periods?.totalMonths||36);
+  const [periodSaved, setPeriodSaved] = useState(false);
+  const savePeriodChange = async () => {
+    await onSavePeriods?.({...periods, totalMonths: localMonths});
+    setPeriodSaved(true);
+    setTimeout(()=>setPeriodSaved(false), 2000);
+  };
   const[expanded,setExpanded]=useState(null);
   const[userScenarios,setUserScenarios]=useState({});
   const[loadingUser,setLoadingUser]=useState(null);
@@ -1266,6 +1275,43 @@ function AdminTab({currentUser,allUsers,admins,onPromote,onDemote,onRefresh,isMo
   return(
     <div>
       <PageHeader title="Admin Panel" subtitle={`${allUsers.length} user${allUsers.length!==1?"s":""} · Manage scenarios and permissions`} actions={<Btn variant="secondary" onClick={onRefresh}>↻ Refresh</Btn>}/>
+
+      {/* Period setup — admin only */}
+      <Card style={{marginBottom:20,border:`1.5px solid ${CN.amber}`,backgroundColor:CN.amberLight}}>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+          <div>
+            <div style={{fontFamily:"'Bowlby One SC',sans-serif",fontSize:14,textTransform:"uppercase",letterSpacing:"0.06em",color:"#92400E",marginBottom:4}}>🗓️ Forecast Period Configuration</div>
+            <div style={{fontSize:13,color:"#92400E",fontFamily:"'Barlow Semi Condensed',sans-serif",lineHeight:1.5,maxWidth:460}}>
+              Controls how many months are modelled in Store Setup calendars and forecasts across all stores. Default is 36 months. Extend cautiously — larger periods increase storage and compute time.
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+            <div>
+              <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",color:"#92400E",fontFamily:"'Barlow Semi Condensed',sans-serif",marginBottom:4}}>Total Months</div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                {[24,36,48,60].map(m=>(
+                  <button key={m} onClick={()=>setLocalMonths(m)} style={{
+                    padding:"6px 12px",borderRadius:8,border:`1.5px solid ${localMonths===m?CN.amber:CN.border}`,
+                    backgroundColor:localMonths===m?CN.amber:CN.white,color:localMonths===m?CN.white:"#92400E",
+                    fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"'Barlow Semi Condensed',sans-serif",
+                  }}>{m}</button>
+                ))}
+                <input type="number" min={12} max={120} step={6} value={localMonths}
+                  onChange={e=>setLocalMonths(parseInt(e.target.value)||36)}
+                  style={{width:70,padding:"6px 8px",borderRadius:8,border:`1.5px solid ${CN.border}`,fontSize:13,fontFamily:"'Barlow Semi Condensed',sans-serif",color:CN.dark,outline:"none"}}/>
+              </div>
+            </div>
+            <button onClick={savePeriodChange} style={{
+              padding:"8px 18px",borderRadius:8,border:"none",cursor:"pointer",fontWeight:700,fontSize:12,
+              backgroundColor:periodSaved?CN.green:CN.amber,color:CN.white,marginTop:18,
+              fontFamily:"'Bowlby One SC',sans-serif",textTransform:"uppercase",letterSpacing:"0.06em",
+              transition:"background 0.3s",
+            }}>
+              {periodSaved?"Saved ✓":"Save"}
+            </button>
+          </div>
+        </div>
+      </Card>
       {allUsers.length===0&&<Note>No users have signed in yet.</Note>}
       {allUsers.map(u=>{
         const isExpanded=expanded===u.id;const uScenarios=userScenarios[u.id];const loading=loadingUser===u.id;const uIsAdmin=isAdminFn(u.id);const uIsSelf=isSelf(u.id);
@@ -1929,8 +1975,13 @@ export default function App({currentUser}){
   const[savedPS,setSavedPS]=useState(null);
   const[savedTaxYears,setSavedTaxYears]=useState(null);
   const[savedOt,setSavedOt]=useState(null);
-  const[forecastSetup,setForecastSetup]=useState(null);
-  const[savedForecastSetup,setSavedForecastSetup]=useState(null);
+  // Store Setup state
+  const[stores,setStores]=useState([]);
+  const[storeConfigs,setStoreConfigs]=useState({});
+  const[activeStoreId,setActiveStoreId]=useState(null);
+  const[periods,setPeriods]=useState({totalMonths:36});
+  const[savingStores,setSavingStores]=useState(false);
+  const[savingStoreConfig,setSavingStoreConfig]=useState(false);
   const[selectedTaxYear,setSelectedTaxYear]=useState(new Date().getFullYear());
   const[admins,setAdmins]=useState([]);
   const[allUsers,setAllUsers]=useState([]);
@@ -1942,7 +1993,7 @@ export default function App({currentUser}){
   const[loading,setLoading]=useState(true);
   const[logoUrl,setLogoUrl]=useState(null);
   const[tabIcons,setTabIcons]=useState(DEFAULT_TAB_ICONS);
-  const[saving,setSaving]=useState({roles:false,plans:false,settings:false,forecastSetup:false});
+  const[saving,setSaving]=useState({roles:false,plans:false,settings:false});
 
   useEffect(()=>{
     const link=document.createElement("link");link.rel="stylesheet";link.href="https://fonts.googleapis.com/css2?family=Bowlby+One+SC&family=Barlow+Semi+Condensed:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap";document.head.appendChild(link);
@@ -1987,9 +2038,20 @@ export default function App({currentUser}){
     setOt(o);setSavedOt(deepClone(o));lastKnownAt.current[SHARED_SK.ot]=oData.updated_at;
     const si=await loadS(SHARED_SK.icons,DEFAULT_TAB_ICONS);setTabIcons({...DEFAULT_TAB_ICONS,...si});
     const sl=await loadS(SHARED_SK.logo,null);if(sl)setLogoUrl(sl);
-    const fsData=await loadSWithTs(SHARED_SK.forecastSetup,null);
-    const fs=fsData.value||DEFAULT_FORECAST_SETUP;
-    setForecastSetup(fs);setSavedForecastSetup(deepClone(fs));lastKnownAt.current[SHARED_SK.forecastSetup]=fsData.updated_at;
+    // Store Setup
+    const storesData=await loadS(SHARED_SK.stores,[]);
+    setStores(storesData);
+    if(storesData.length>0){
+      const configs={};
+      for(const s of storesData){
+        const cfg=await loadS(`cn-store-config-${s.id}-v1`,null);
+        configs[s.id]=cfg||deepClone(DEFAULT_STORE_CONFIG);
+      }
+      setStoreConfigs(configs);
+      setActiveStoreId(storesData[0].id);
+    }
+    const perData=await loadS(SHARED_SK.periods,{totalMonths:36});
+    setPeriods(perData);
     if(showLoader)setLoading(false);
   },[SK,migrate,registerUser]);
 
@@ -2011,11 +2073,20 @@ export default function App({currentUser}){
   const saveRoles=()=>doSave("roles",[{key:SK.roleScenarios,val:roleScenarios,setSaved:setSavedRS}]);
   const savePlans=()=>doSave("plans",[{key:SK.planScenarios,val:planScenarios,setSaved:setSavedPS}]);
   const saveSettings=()=>doSave("settings",[{key:SHARED_SK.taxYears,val:taxYears,setSaved:setSavedTaxYears},{key:SHARED_SK.ot,val:ot,setSaved:setSavedOt}]);
-  const saveForecastSetup=()=>doSave("forecastSetup",[{key:SHARED_SK.forecastSetup,val:forecastSetup,setSaved:setSavedForecastSetup}]);
+  const saveStoresList=useCallback(async(storesList)=>{
+    setSavingStores(true);
+    await saveS(SHARED_SK.stores,storesList);
+    setSavingStores(false);
+  },[]);
+  const saveStoreConfig=useCallback(async(storeId,config)=>{
+    setSavingStoreConfig(true);
+    await saveS(`cn-store-config-${storeId}-v1`,config);
+    setSavingStoreConfig(false);
+  },[]);
+  const savePeriods=useCallback(async(p)=>{ await saveS(SHARED_SK.periods,p); },[]);
   const clearRoles=()=>setRoleScenarios(deepClone(savedRS));
   const clearPlansWeek=(weekOf)=>setPlanScenarios(prev=>({...prev,scenarios:prev.scenarios.map(s=>s.id===prev.activeId?{...s,plans:[...s.plans.filter(p=>p.weekOf!==weekOf),...(savedPS.scenarios.find(ss=>ss.id===prev.activeId)?.plans.filter(p=>p.weekOf===weekOf)||[])]}:s)}));
   const clearSettings=()=>{setTaxYears(deepClone(savedTaxYears));setOt(deepClone(savedOt));};
-  const clearForecastSetup=()=>setForecastSetup(deepClone(savedForecastSetup));
   const claimAdmin=async()=>{const updated=[currentUser.id];await saveS(SHARED_SK.admins,updated);setAdmins(updated);};
   const promoteUser=async(userId)=>{const updated=[...admins,userId];await saveS(SHARED_SK.admins,updated);setAdmins(updated);};
   const demoteUser=async(userId)=>{const updated=admins.filter(id=>id!==userId);await saveS(SHARED_SK.admins,updated);setAdmins(updated);};
@@ -2023,11 +2094,10 @@ export default function App({currentUser}){
   const rolesDirty=!!savedRS&&JSON.stringify(roleScenarios)!==JSON.stringify(savedRS);
   const plansDirty=!!savedPS&&JSON.stringify(planScenarios)!==JSON.stringify(savedPS);
   const settingsDirty=!!savedTaxYears&&(JSON.stringify(taxYears)!==JSON.stringify(savedTaxYears)||JSON.stringify(ot)!==JSON.stringify(savedOt));
-  const forecastSetupDirty=!!savedForecastSetup&&JSON.stringify(forecastSetup)!==JSON.stringify(savedForecastSetup);
 
   const navGroups=[
     {label:"FP&A",items:[
-      {id:"forecast-setup",label:"Forecast Setup",icon:"📐",dirty:forecastSetupDirty},
+      {id:"forecast-setup",label:"Store Setup",icon:"📐"},
     ]},
     {label:"Operations",items:[
       {id:"forecast",label:"Headcount Forecaster",icon:"🔮"},
@@ -2087,13 +2157,21 @@ export default function App({currentUser}){
         )}
 
         <div style={innerPad}>
-          {tab==="forecast-setup"&&forecastSetup&&<ForecastSetupTab setup={forecastSetup} setSetup={setForecastSetup} savedSetup={savedForecastSetup} onSave={saveForecastSetup} onClear={clearForecastSetup} saving={saving.forecastSetup} isMobile={isMobile}/>}
+          {tab==="forecast-setup"&&<StoreSetupTab
+            stores={stores} setStores={setStores}
+            activeStoreId={activeStoreId} setActiveStoreId={setActiveStoreId}
+            periods={{ months: periods.totalMonths||periods.months||36 }}
+            savedStores={stores}
+            onSave={saveStoresList} onClear={()=>{}}
+            saving={savingStores}
+            isAdmin={effectiveAdmin} isMobile={isMobile}
+          />}
           {tab==="roles"&&roleScenarios&&<RolesTab roleScenarios={roleScenarios} setRoleScenarios={setRoleScenarios} taxYears={taxYears} ot={ot} isAdmin={effectiveAdmin} dirty={rolesDirty} onSave={saveRoles} onClear={clearRoles} saving={saving.roles} isMobile={isMobile}/>}
           {tab==="plan"&&planScenarios&&roleScenarios&&<PlanTab roleScenarios={roleScenarios} planScenarios={planScenarios} setPlanScenarios={setPlanScenarios} taxYears={taxYears} ot={ot} isAdmin={effectiveAdmin} dirty={plansDirty} onSave={savePlans} onClear={clearPlansWeek} saving={saving.plans} isMobile={isMobile}/>}
           {tab==="summary"&&<SummaryTab roleScenarios={roleScenarios||{scenarios:[]}} planScenarios={planScenarios||{scenarios:[]}} taxYears={taxYears} ot={ot} onRefresh={()=>loadAll(false)}/>}
           {tab==="settings"&&taxYears&&ot&&<TaxTab taxYears={taxYears} setTaxYears={setTaxYears} selectedYear={selectedTaxYear} setSelectedYear={setSelectedTaxYear} ot={ot} setOt={setOt} dirty={settingsDirty} onSave={saveSettings} onClear={clearSettings} saving={saving.settings} isMobile={isMobile}/>}
           {tab==="forecast"&&roleScenarios&&planScenarios&&<ForecasterTab roleScenarios={roleScenarios} setRoleScenarios={setRoleScenarios} planScenarios={planScenarios} setPlanScenarios={setPlanScenarios} taxYears={taxYears} ot={ot} isMobile={isMobile} onAccepted={()=>{saveRoles();savePlans();}}/>}
-          {tab==="admin"&&effectiveAdmin&&<AdminTab currentUser={currentUser} allUsers={allUsers} admins={admins} onPromote={promoteUser} onDemote={demoteUser} onRefresh={()=>loadAll(false)} isMobile={isMobile}/>}
+          {tab==="admin"&&effectiveAdmin&&<AdminTab currentUser={currentUser} allUsers={allUsers} admins={admins} onPromote={promoteUser} onDemote={demoteUser} onRefresh={()=>loadAll(false)} isMobile={isMobile} periods={periods} onSavePeriods={async(p)=>{setPeriods(p);await savePeriods(p);}}/>}
         </div>
       </div>
     </div>
