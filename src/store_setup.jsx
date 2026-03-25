@@ -55,14 +55,14 @@ export const DEFAULT_STORE={
     {id:"s4",acquisition:"Mid",growth:"Low",name:"Scenario 4",active:true,isBase:false},
     {id:"s5",acquisition:"Mid",growth:"Mid",name:"Scenario 5",active:true,isBase:false},
     {id:"s6",acquisition:"Mid",growth:"High",name:"Scenario 6",active:true,isBase:false},
-    {id:"s7",acquisition:"High",growth:"Low",name:"Scenario 7",active:false,isBase:false},
-    {id:"s8",acquisition:"High",growth:"Mid",name:"Scenario 8",active:false,isBase:false},
-    {id:"s9",acquisition:"High",growth:"High",name:"Scenario 9",active:false,isBase:false},
+    {id:"s7",acquisition:"High",growth:"Low",name:"Scenario 7",active:true,isBase:false},
+    {id:"s8",acquisition:"High",growth:"Mid",name:"Scenario 8",active:true,isBase:false},
+    {id:"s9",acquisition:"High",growth:"High",name:"Scenario 9",active:true,isBase:false},
   ],
   setupComplete:false,
 };
 
-const SECTIONS=["about","timeline","schedule","seasonality","scenarios","acquisition","growth"];
+const SECTIONS=["about","timeline","schedule","seasonality","acquisition","growth","scenarios"];
 function isSectionComplete(store,id){
   if(!store)return false;
   if(id==="about")return!!(store.name?.trim()&&store.address?.trim());
@@ -81,6 +81,76 @@ const INP={border:`1.5px solid ${CN.border}`,borderRadius:8,padding:"9px 12px",f
 function Lbl({children,required}){return<label style={{fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:CN.mid,display:"block",marginBottom:5,fontFamily:FB}}>{children}{required&&<span style={{color:CN.orange,marginLeft:3}}>*</span>}</label>;}
 function FG({label,note,required,children,style={}}){return<div style={{marginBottom:16,...style}}>{label&&<Lbl required={required}>{label}</Lbl>}{children}{note&&<div style={{fontSize:13,color:CN.mid,marginTop:4,fontFamily:FB,lineHeight:1.5}}>{note}</div>}</div>;}
 function InfoBox({children,type="info"}){const s={info:{bg:CN.creamDark,border:CN.border,text:CN.mid},warning:{bg:CN.amberLight,border:CN.amber,text:"#92400E"},success:{bg:CN.greenLight,border:CN.green,text:CN.green},alert:{bg:CN.orangeLight,border:CN.orange,text:CN.orangeHover}}[type]||{};return<div style={{backgroundColor:s.bg,border:`1px solid ${s.border}`,borderRadius:8,padding:"10px 14px",fontSize:14,color:s.text,marginBottom:14,fontFamily:FB,lineHeight:1.5}}>{children}</div>;}
+
+// Inline suggestion box — shows below input fields when AI has a proposal
+function SuggestionBox({label,rows,onApply,onDismiss,generatedAt}){
+  return(
+    <div style={{marginTop:12,border:`2px solid ${CN.orange}`,borderRadius:10,backgroundColor:CN.orangeLight,overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 14px",borderBottom:`1px solid ${CN.orange}30`,backgroundColor:"rgba(255,60,0,0.08)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:7}}>
+          <span style={{fontSize:14}}>✨</span>
+          <span style={{fontFamily:FH,fontSize:12,textTransform:"uppercase",letterSpacing:"0.07em",color:CN.orange}}>AI Suggestion</span>
+          {generatedAt&&<span style={{fontSize:11,color:CN.orangeHover,fontFamily:FB}}>· saved {fmtDate(generatedAt.split("T")[0])}</span>}
+        </div>
+        <button onClick={onDismiss} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,color:CN.orangeHover,fontFamily:FB,padding:"2px 4px"}} title="Dismiss suggestion">✕</button>
+      </div>
+      <div style={{padding:"12px 14px"}}>
+        <div style={{display:"grid",gap:6,marginBottom:12}}>
+          {rows.map(r=>(
+            <div key={r.label} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 12px",backgroundColor:"rgba(255,60,0,0.06)",borderRadius:7,border:`1px solid ${CN.orange}20`}}>
+              <span style={{fontSize:14,color:CN.dark,fontFamily:FB,fontWeight:600}}>{r.label}</span>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                {r.current!==undefined&&<span style={{fontSize:12,color:CN.mid,fontFamily:FB,textDecoration:"line-through"}}>{r.current}</span>}
+                <span style={{fontSize:15,fontWeight:800,color:CN.orange,fontFamily:FH}}>{r.suggested}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button onClick={onApply} style={{
+          width:"100%",padding:"9px",borderRadius:8,border:"none",
+          backgroundColor:CN.orange,color:CN.white,fontFamily:FH,
+          fontWeight:700,fontSize:13,textTransform:"uppercase",
+          letterSpacing:"0.06em",cursor:"pointer",
+        }}>Apply These Values →</button>
+      </div>
+    </div>
+  );
+}
+
+// Saved AI narrative — shown in completed setup view
+function AiNarrativeCard({aiData,label}){
+  const[open,setOpen]=useState(false);
+  if(!aiData?.history?.length)return null;
+  const lastMsg=[...aiData.history].reverse().find(m=>m.role==="assistant");
+  if(!lastMsg)return null;
+  const preview=lastMsg.content.replace(/```json[\s\S]*?```/g,"").trim().slice(0,160)+"…";
+  return(
+    <div style={{marginTop:14,border:`1px solid ${CN.orange}30`,borderRadius:10,backgroundColor:"rgba(255,60,0,0.03)",overflow:"hidden"}}>
+      <button onClick={()=>setOpen(v=>!v)} style={{
+        width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",
+        padding:"10px 14px",background:"none",border:"none",cursor:"pointer",textAlign:"left",
+      }}>
+        <div style={{display:"flex",alignItems:"center",gap:7}}>
+          <span style={{fontSize:14}}>✨</span>
+          <span style={{fontFamily:FH,fontSize:12,textTransform:"uppercase",letterSpacing:"0.07em",color:CN.orange}}>{label||"AI Analysis"}</span>
+          <span style={{fontSize:11,color:CN.mid,fontFamily:FB}}>· saved {fmtDate(aiData.generatedAt?.split("T")[0])}</span>
+        </div>
+        <span style={{fontSize:12,color:CN.mid}}>{open?"▲":"▼"}</span>
+      </button>
+      {!open&&<div style={{padding:"0 14px 12px",fontSize:13,color:CN.mid,fontFamily:FB,lineHeight:1.5}}>{preview}</div>}
+      {open&&(
+        <div style={{padding:"0 14px 14px",fontSize:13,color:CN.dark,fontFamily:FB,lineHeight:1.7,whiteSpace:"pre-wrap",borderTop:`1px solid ${CN.orange}20`}}>
+          {lastMsg.content.replace(/```json[\s\S]*?```/g,"").trim()}
+          {aiData.history.filter(m=>m.role==="user").length>1&&(
+            <div style={{marginTop:12,fontSize:12,color:CN.mid,fontFamily:FB}}>
+              {aiData.history.filter(m=>m.role==="user").length-1} follow-up question{aiData.history.filter(m=>m.role==="user").length>2?"s":""} in this conversation.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 function Btn({onClick,children,variant="primary",style={},disabled=false}){
   const base={border:"none",borderRadius:8,padding:"9px 20px",fontSize:14,fontWeight:700,cursor:disabled?"not-allowed":"pointer",fontFamily:FH,textTransform:"uppercase",letterSpacing:"0.06em",transition:"all 0.15s",opacity:disabled?0.4:1};
   const v={primary:{...base,backgroundColor:CN.orange,color:CN.white},secondary:{...base,backgroundColor:CN.creamDark,color:CN.dark},danger:{...base,backgroundColor:CN.red,color:CN.white},ai:{...base,backgroundColor:"#1a1a2e",color:"#a8d5e2",display:"flex",alignItems:"center",gap:7}};
@@ -163,6 +233,27 @@ function ChatPanel({ title, systemPrompt, savedHistory, onSaveHistory, onClose, 
     onSaveHistory(messages);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleDownload = () => {
+    const lines = [];
+    lines.push(`# ${title}`);
+    lines.push(`_Downloaded ${new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}_\n`);
+    messages.forEach((m, i) => {
+      if (m.role === "user" && i === 0) return; // skip system prompt
+      if (m.role === "user") {
+        lines.push(`---\n**You:** ${m.content}\n`);
+      } else {
+        lines.push(`**Claude:** ${m.content.replace(/```json[\s\S]*?```/g,"").trim()}\n`);
+      }
+    });
+    const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${title.toLowerCase().replace(/\s+/g,"-")}-analysis.md`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const lastAssistant = [...messages].reverse().find(m => m.role === "assistant");
@@ -257,18 +348,23 @@ function ChatPanel({ title, systemPrompt, savedHistory, onSaveHistory, onClose, 
           )}
         </div>
 
-        {/* Save button */}
+        {/* Save + Download buttons */}
         {lastAssistant && (
-          <div style={{ padding: "10px 18px", borderTop: `1px solid ${CN.border}`, flexShrink: 0, backgroundColor: CN.cream }}>
+          <div style={{ padding: "10px 18px", borderTop: `1px solid ${CN.border}`, flexShrink: 0, backgroundColor: CN.cream, display:"flex", gap:8 }}>
             <button onClick={handleSave} style={{
-              width: "100%", padding: "9px 16px", borderRadius: 8, border: "none",
+              flex:1, padding: "9px 16px", borderRadius: 8, border: "none",
               backgroundColor: saved ? CN.green : CN.orange,
-              color: CN.white, fontFamily: FH, fontWeight: 700, fontSize: 13,
+              color: CN.white, fontFamily: FH, fontWeight: 700, fontSize: 12,
               textTransform: "uppercase", letterSpacing: "0.06em", cursor: "pointer",
               transition: "background 0.3s",
             }}>
-              {saved ? "✓ Saved to Setup" : "Save This Analysis to Setup"}
+              {saved ? "✓ Saved" : "Save to Setup"}
             </button>
+            <button onClick={handleDownload} title="Download as Markdown" style={{
+              flexShrink:0, padding:"9px 13px", borderRadius:8,
+              border:`1.5px solid ${CN.border}`, backgroundColor:CN.white,
+              color:CN.mid, cursor:"pointer", fontSize:16, lineHeight:1,
+            }}>⬇</button>
           </div>
         )}
 
@@ -571,17 +667,23 @@ Suggest revised multipliers for all four seasons with specific reasoning for THI
           </div>
         );})}
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+
+      {store.aiSeasonality?.suggestion&&(
+        <SuggestionBox
+          generatedAt={store.aiSeasonality.generatedAt}
+          rows={Object.entries(store.aiSeasonality.suggestion).map(([s,v])=>({label:s,current:`${sea[s]||1}\u00d7`,suggested:`${v}\u00d7`}))}
+          onApply={()=>onChange(p=>({...deepClone(p),seasonality:store.aiSeasonality.suggestion}))}
+          onDismiss={()=>onChange(p=>({...deepClone(p),aiSeasonality:{...p.aiSeasonality,suggestion:null}}))}
+        />
+      )}
+
+      <AiNarrativeCard aiData={store.aiSeasonality} label="Seasonality Analysis"/>
+
+      <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",marginTop:14}}>
         <Btn variant="ai" onClick={()=>setShowAI(true)}>
-          <span>✨</span>{store.aiSeasonality?"View / Continue AI Chat":"Check with AI"}
+          <span>✨</span>{store.aiSeasonality?"Continue AI Chat":"Check with AI"}
         </Btn>
         {store.aiSeasonality&&<span style={{fontSize:13,color:CN.mid,fontFamily:FB}}>Saved {fmtDate(store.aiSeasonality.generatedAt?.split("T")[0])}</span>}
-        {store.aiSeasonality?.suggestion&&(
-          <button onClick={()=>onChange(p=>({...deepClone(p),seasonality:store.aiSeasonality.suggestion}))}
-            style={{fontSize:13,padding:"5px 12px",borderRadius:8,border:`1.5px solid ${CN.green}`,backgroundColor:CN.greenLight,color:CN.green,cursor:"pointer",fontFamily:FB,fontWeight:600}}>
-            Apply saved suggestion
-          </button>
-        )}
       </div>
       {showAI&&<ChatPanel title="Seasonality Analysis" systemPrompt={buildSystemPrompt()} savedHistory={store.aiSeasonality?.history||[]} onSaveHistory={saveHistory} onClose={()=>setShowAI(false)} missingContext={missingCtx}/>}
     </div>
@@ -697,17 +799,22 @@ End with a JSON block: \`\`\`json\n{"Low": 0, "Mid": 0, "High": 0}\n\`\`\``;
           </div>
         );})}
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      {store.aiAcquisition?.suggestion&&(
+        <SuggestionBox
+          generatedAt={store.aiAcquisition.generatedAt}
+          rows={["Low","Mid","High"].map(k=>({label:`${k} Acquisition`,current:`${(store.acquisitionProfiles?.[k]?.baseTransactions||0).toLocaleString()} tx/mo`,suggested:`${(store.aiAcquisition.suggestion[k]||0).toLocaleString()} tx/mo`}))}
+          onApply={()=>onChange(prev=>({...deepClone(prev),acquisitionProfiles:{Low:{...prev.acquisitionProfiles.Low,baseTransactions:store.aiAcquisition.suggestion.Low},Mid:{...prev.acquisitionProfiles.Mid,baseTransactions:store.aiAcquisition.suggestion.Mid},High:{...prev.acquisitionProfiles.High,baseTransactions:store.aiAcquisition.suggestion.High}}}))}
+          onDismiss={()=>onChange(p=>({...deepClone(p),aiAcquisition:{...p.aiAcquisition,suggestion:null}}))}
+        />
+      )}
+
+      <AiNarrativeCard aiData={store.aiAcquisition} label="Acquisition Analysis"/>
+
+      <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",marginTop:14}}>
         <Btn variant="ai" onClick={()=>setShowAI(true)}>
-          <span>✨</span>{store.aiAcquisition?"View / Continue AI Chat":"Check with AI"}
+          <span>✨</span>{store.aiAcquisition?"Continue AI Chat":"Check with AI"}
         </Btn>
         {store.aiAcquisition&&<span style={{fontSize:13,color:CN.mid,fontFamily:FB}}>Saved {fmtDate(store.aiAcquisition.generatedAt?.split("T")[0])}</span>}
-        {store.aiAcquisition?.suggestion&&(
-          <button onClick={()=>onChange(prev=>({...deepClone(prev),acquisitionProfiles:{Low:{...prev.acquisitionProfiles.Low,baseTransactions:store.aiAcquisition.suggestion.Low},Mid:{...prev.acquisitionProfiles.Mid,baseTransactions:store.aiAcquisition.suggestion.Mid},High:{...prev.acquisitionProfiles.High,baseTransactions:store.aiAcquisition.suggestion.High}}}))}
-            style={{fontSize:13,padding:"5px 12px",borderRadius:8,border:`1.5px solid ${CN.green}`,backgroundColor:CN.greenLight,color:CN.green,cursor:"pointer",fontFamily:FB,fontWeight:600}}>
-            Apply saved values
-          </button>
-        )}
       </div>
       {showAI&&<ChatPanel title="Acquisition Analysis" systemPrompt={buildSystemPrompt()} savedHistory={store.aiAcquisition?.history||[]} onSaveHistory={saveHistory} onClose={()=>setShowAI(false)} missingContext={missingCtx}/>}
     </div>
@@ -778,9 +885,11 @@ Assess whether each profile is realistic, aggressive, or conservative for this c
           );
         })}
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <AiNarrativeCard aiData={store.aiGrowth} label="Growth Profile Analysis"/>
+
+      <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",marginTop:14}}>
         <Btn variant="ai" onClick={()=>setShowAI(true)}>
-          <span>✨</span>{store.aiGrowth?"View / Continue AI Chat":"Check with AI"}
+          <span>✨</span>{store.aiGrowth?"Continue AI Chat":"Check with AI"}
         </Btn>
         {store.aiGrowth&&<span style={{fontSize:13,color:CN.mid,fontFamily:FB}}>Saved {fmtDate(store.aiGrowth.generatedAt?.split("T")[0])}</span>}
       </div>
