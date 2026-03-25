@@ -2061,6 +2061,7 @@ export default function App({currentUser}){
 
   const loadAll=useCallback(async(showLoader=true)=>{
     if(showLoader)setLoading(true);
+    try{
     const[updatedRegistry,adminList]=await Promise.all([registerUser(),loadS(SHARED_SK.admins,[])]);
     setAllUsers(updatedRegistry);setAdmins(adminList);
     const rsData=await loadSWithTs(SK.roleScenarios,null);const psData=await loadSWithTs(SK.planScenarios,null);
@@ -2071,30 +2072,35 @@ export default function App({currentUser}){
     let ps=psData.value;if(!ps){ps=(await getMigrated()).ps;}
     if(ps&&ps.scenarios.length>0&&!ps.scenarios.some(s=>s.isDefault)){ps={...ps,scenarios:ps.scenarios.map((s,i)=>i===0?{...s,isDefault:true}:s)};}
     setPlanScenarios(ps);setSavedPS(deepClone(ps));lastKnownAt.current[SK.planScenarios]=psData.updated_at;
-    const tyData=await loadSWithTs(SHARED_SK.taxYears,null);let ty=tyData.value;
+    const[tyData,oData,si,sl,storesData,perData]=await Promise.all([
+      loadSWithTs(SHARED_SK.taxYears,null),
+      loadSWithTs(SHARED_SK.ot,DEFAULT_OT),
+      loadS(SHARED_SK.icons,DEFAULT_TAB_ICONS),
+      loadS(SHARED_SK.logo,null),
+      loadS(SHARED_SK.stores,[]),
+      loadS(SHARED_SK.periods,{totalMonths:36}),
+    ]);
+    let ty=tyData.value;
     if(!ty){const oldTax=await loadS(SHARED_SK.tax,null);const year=new Date().getFullYear();ty=oldTax?{[year]:{...DEFAULT_TAX,...oldTax}}:{};}
     setTaxYears(ty);setSavedTaxYears(deepClone(ty));lastKnownAt.current[SHARED_SK.taxYears]=tyData.updated_at;
-    const oData=await loadSWithTs(SHARED_SK.ot,DEFAULT_OT);const o={...DEFAULT_OT,...oData.value};
+    const o={...DEFAULT_OT,...oData.value};
     setOt(o);setSavedOt(deepClone(o));lastKnownAt.current[SHARED_SK.ot]=oData.updated_at;
-    const si=await loadS(SHARED_SK.icons,DEFAULT_TAB_ICONS);setTabIcons({...DEFAULT_TAB_ICONS,...si});
-    const sl=await loadS(SHARED_SK.logo,null);if(sl)setLogoUrl(sl);
-    // Store Setup
-    const storesData=await loadS(SHARED_SK.stores,[]);
+    setTabIcons({...DEFAULT_TAB_ICONS,...si});
+    if(sl)setLogoUrl(sl);
     setStores(storesData);
+    setPeriods(perData);
     if(storesData.length>0){
       const configs={};
-      for(const s of storesData){
+      await Promise.all(storesData.map(async s=>{
         const cfg=await loadS(`cn-store-config-${s.id}-v1`,null);
         configs[s.id]=cfg||deepClone(DEFAULT_STORE_CONFIG);
-      }
+      }));
       setStoreConfigs(configs);
       setActiveStoreId(storesData[0].id);
     }
-    const perData=await loadS(SHARED_SK.periods,{totalMonths:36});
-    setPeriods(perData);
-    if(showLoader)setLoading(false);
+    }catch(e){console.error("loadAll error:",e);}
+    finally{if(showLoader)setLoading(false);}
   },[SK,migrate,registerUser]);
-
   useEffect(()=>{if(!loadDone.current){loadDone.current=true;loadAll();}},[loadAll]);
   useEffect(()=>{saveS(SHARED_SK.icons,tabIcons);},[tabIcons]);
   useEffect(()=>{if(logoUrl!==null)saveS(SHARED_SK.logo,logoUrl);},[logoUrl]);
