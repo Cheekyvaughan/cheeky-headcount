@@ -101,33 +101,214 @@ function SectionCard({num,title,subtitle,complete,locked,children}){
   );
 }
 
-// ── AI Panel ──────────────────────────────────────────────────────
-function AIPanel({title,onClose,children}){
-  return(
-    <div style={{width:360,flexShrink:0,backgroundColor:CN.white,border:`1.5px solid ${CN.border}`,borderRadius:14,display:"flex",flexDirection:"column",maxHeight:560,boxShadow:"0 8px 32px rgba(0,0,0,0.10)",position:"sticky",top:0,alignSelf:"flex-start"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 18px",borderBottom:`1px solid ${CN.border}`,backgroundColor:CN.creamDark,borderRadius:"13px 13px 0 0",flexShrink:0}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <span style={{fontSize:18}}>🤖</span>
-          <span style={{fontFamily:FH,fontSize:13,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.06em",color:CN.dark}}>{title}</span>
-        </div>
-        <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:CN.mid,lineHeight:1,padding:0}}>✕</button>
-      </div>
-      <div style={{overflowY:"auto",flex:1,padding:"16px 18px"}}>{children}</div>
-    </div>
-  );
-}
+// ── Chat panel (fixed drawer — no layout impact) ──────────────────
+// Renders outside the form flow so it never causes horizontal scroll.
+// Each AI section owns its own history via the savedHistory prop.
+function ChatPanel({ title, systemPrompt, savedHistory, onSaveHistory, onClose, missingContext }) {
+  const [messages, setMessages] = useState(() => savedHistory?.length ? savedHistory : []);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const scrollRef = useRef(null);
+  const inputRef = useRef(null);
 
-async function callClaude(prompt,onStart,onDone,onError){
-  onStart?.();
-  try{
-    const token=await window._clerkGetToken?.();
-    if(!token)throw new Error("Not signed in — please refresh.");
-    const res=await fetch(`${WORKER}/forecast`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:prompt}]})});
-    if(!res.ok){const t=await res.text();let m=`Error ${res.status}`;try{m=JSON.parse(t)?.error?.message||m;}catch{}throw new Error(m);}
-    const data=await res.json();
-    const text=data.content?.map(b=>b.text||"").join("")||"";
-    onDone?.(text);return text;
-  }catch(e){onError?.(e.message);return null;}
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, loading]);
+
+  // Auto-generate opening message on first open
+  useEffect(() => {
+    if (!missingContext && messages.length === 0 && systemPrompt) {
+      sendMessage(systemPrompt, true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const sendMessage = async (content, isSystem = false) => {
+    if (!content.trim()) return;
+    const userMsg = { role: "user", content: isSystem ? content : content.trim() };
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
+    if (!isSystem) setInput("");
+    setLoading(true);
+    setError("");
+    try {
+      const token = await window._clerkGetToken?.();
+      if (!token) throw new Error("Not signed in — please refresh.");
+      const res = await fetch(`${WORKER}/forecast`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1200, messages: newMessages }),
+      });
+      if (!res.ok) {
+        const t = await res.text();
+        let m = `Error ${res.status}`;
+        try { m = JSON.parse(t)?.error?.message || m; } catch {}
+        throw new Error(m);
+      }
+      const data = await res.json();
+      const text = data.content?.map(b => b.text || "").join("") || "";
+      const withReply = [...newMessages, { role: "assistant", content: text }];
+      setMessages(withReply);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = () => {
+    onSaveHistory(messages);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const lastAssistant = [...messages].reverse().find(m => m.role === "assistant");
+
+  return (
+    <>
+      {/* Backdrop on mobile */}
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1099, backgroundColor: "rgba(0,0,0,0.25)" }} />
+      {/* Drawer */}
+      <div style={{
+        position: "fixed", right: 0, top: 0, bottom: 0, zIndex: 1100,
+        width: "min(440px, 92vw)",
+        backgroundColor: CN.white,
+        borderLeft: `1.5px solid ${CN.border}`,
+        boxShadow: "-8px 0 32px rgba(0,0,0,0.12)",
+        display: "flex", flexDirection: "column",
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "16px 18px", borderBottom: `1px solid ${CN.border}`,
+          backgroundColor: "#1a1a2e", flexShrink: 0,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 18 }}>✨</span>
+            <div>
+              <div style={{ fontFamily: FH, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.06em", color: "#a8d5e2" }}>{title}</div>
+              <div style={{ fontSize: 12, color: "rgba(168,213,226,0.55)", fontFamily: FB }}>Claude · Ask follow-up questions</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "rgba(255,255,255,0.5)", lineHeight: 1, padding: "4px" }}>✕</button>
+        </div>
+
+        {/* Missing context warning */}
+        {missingContext && (
+          <div style={{ padding: "14px 18px", backgroundColor: CN.amberLight, borderBottom: `1px solid ${CN.amber}`, flexShrink: 0 }}>
+            <div style={{ fontSize: 13, color: "#92400E", fontFamily: FB, lineHeight: 1.5 }}>
+              ⚠️ {missingContext}
+            </div>
+          </div>
+        )}
+
+        {/* Messages */}
+        <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
+          {messages.length === 0 && !loading && !missingContext && (
+            <div style={{ textAlign: "center", padding: "32px 16px", color: CN.mid }}>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>✨</div>
+              <div style={{ fontSize: 14, fontFamily: FB, lineHeight: 1.5 }}>Generating analysis…</div>
+            </div>
+          )}
+          {messages.filter(m => m.role === "assistant" || (m.role === "user" && messages.indexOf(m) > 0)).map((msg, i) => {
+            // Only show user messages that are follow-ups (not the system prompt)
+            const isUser = msg.role === "user";
+            if (isUser && i === 0) return null;
+            return (
+              <div key={i} style={{
+                display: "flex", justifyContent: isUser ? "flex-end" : "flex-start",
+              }}>
+                <div style={{
+                  maxWidth: "88%",
+                  padding: "10px 14px",
+                  borderRadius: isUser ? "14px 14px 4px 14px" : "4px 14px 14px 14px",
+                  backgroundColor: isUser ? CN.orange : CN.creamDark,
+                  color: isUser ? CN.white : CN.dark,
+                  fontSize: 14, fontFamily: FB, lineHeight: 1.65,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}>
+                  {msg.content.replace(/```json[\s\S]*?```/g, "").trim()}
+                </div>
+              </div>
+            );
+          })}
+          {loading && (
+            <div style={{ display: "flex", justifyContent: "flex-start" }}>
+              <div style={{ padding: "10px 14px", borderRadius: "4px 14px 14px 14px", backgroundColor: CN.creamDark }}>
+                <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                  {[0, 1, 2].map(i => (
+                    <div key={i} style={{
+                      width: 7, height: 7, borderRadius: "50%", backgroundColor: CN.mid,
+                      animation: `pulse ${0.6 + i * 0.2}s ease-in-out infinite alternate`,
+                    }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          {error && (
+            <div style={{ padding: "10px 14px", borderRadius: 8, backgroundColor: CN.redLight, color: CN.red, fontSize: 13, fontFamily: FB }}>
+              ⚠️ {error}
+            </div>
+          )}
+        </div>
+
+        {/* Save button */}
+        {lastAssistant && (
+          <div style={{ padding: "10px 18px", borderTop: `1px solid ${CN.border}`, flexShrink: 0, backgroundColor: CN.cream }}>
+            <button onClick={handleSave} style={{
+              width: "100%", padding: "9px 16px", borderRadius: 8, border: "none",
+              backgroundColor: saved ? CN.green : CN.orange,
+              color: CN.white, fontFamily: FH, fontWeight: 700, fontSize: 13,
+              textTransform: "uppercase", letterSpacing: "0.06em", cursor: "pointer",
+              transition: "background 0.3s",
+            }}>
+              {saved ? "✓ Saved to Setup" : "Save This Analysis to Setup"}
+            </button>
+          </div>
+        )}
+
+        {/* Input */}
+        <div style={{
+          padding: "12px 18px 16px", borderTop: `1px solid ${CN.border}`,
+          flexShrink: 0, backgroundColor: CN.white,
+          display: "flex", gap: 8, alignItems: "flex-end",
+        }}>
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (!loading && input.trim()) sendMessage(input); } }}
+            placeholder="Ask a follow-up question… (Enter to send)"
+            disabled={loading || !!missingContext}
+            rows={2}
+            style={{
+              flex: 1, border: `1.5px solid ${CN.border}`, borderRadius: 10,
+              padding: "9px 12px", fontSize: 14, fontFamily: FB, color: CN.dark,
+              backgroundColor: CN.white, outline: "none", resize: "none",
+              lineHeight: 1.5,
+            }}
+          />
+          <button
+            onClick={() => !loading && input.trim() && sendMessage(input)}
+            disabled={loading || !input.trim() || !!missingContext}
+            style={{
+              padding: "9px 16px", borderRadius: 10, border: "none",
+              backgroundColor: CN.orange, color: CN.white, cursor: "pointer",
+              fontFamily: FH, fontWeight: 700, fontSize: 13, flexShrink: 0,
+              opacity: loading || !input.trim() ? 0.4 : 1,
+              alignSelf: "flex-end",
+            }}
+          >↑</button>
+        </div>
+      </div>
+      <style>{`@keyframes pulse { from { opacity: 0.3; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }`}</style>
+    </>
+  );
 }
 
 // ── Calendar schedule ─────────────────────────────────────────────
@@ -148,13 +329,13 @@ function ScheduleCalendar({schedule,onChange}){
   const clearExc=()=>{const key=dk(sel);const{[key]:_,...rest}=schedule.exceptions||{};onChange({...schedule,exceptions:rest});setSel(null);};
   return(
     <div>
-      {/* Standard template */}
+      {/* Standard template — stacked layout, no horizontal overflow */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:18}}>
         {[{k:"weekday",l:"Mon – Fri"},{k:"saturday",l:"Saturday"},{k:"sunday",l:"Sunday"}].map(({k,l})=>{
           const row=schedule[k]||{};
           return(
             <div key={k} style={{backgroundColor:row.closed?CN.creamDark:CN.blueLight,border:`1.5px solid ${row.closed?CN.border:CN.blue}`,borderRadius:10,padding:"12px 14px"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                 <span style={{fontWeight:700,fontSize:15,color:CN.dark,fontFamily:FB}}>{l}</span>
                 <label style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer",fontSize:13,color:CN.mid,fontFamily:FB}}>
                   <input type="checkbox" checked={!!row.closed} onChange={e=>onChange({...schedule,[k]:{...row,closed:e.target.checked}})} style={{accentColor:CN.orange}}/>
@@ -162,13 +343,19 @@ function ScheduleCalendar({schedule,onChange}){
                 </label>
               </div>
               {!row.closed&&(
-                <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                  <input type="time" value={row.open||""} onChange={e=>onChange({...schedule,[k]:{...row,open:e.target.value}})} style={{...INP,fontSize:13,padding:"5px 8px",flex:1}}/>
-                  <span style={{fontSize:13,color:CN.mid}}>–</span>
-                  <input type="time" value={row.close||""} onChange={e=>onChange({...schedule,[k]:{...row,close:e.target.value}})} style={{...INP,fontSize:13,padding:"5px 8px",flex:1}}/>
-                  <span style={{fontSize:14,fontWeight:700,color:CN.orange,fontFamily:FH,whiteSpace:"nowrap"}}>{fmtHrs(row.open,row.close)}</span>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:12,color:CN.mid,fontFamily:FB,width:36,flexShrink:0}}>Opens</span>
+                    <input type="time" value={row.open||""} onChange={e=>onChange({...schedule,[k]:{...row,open:e.target.value}})} style={{...INP,fontSize:14,padding:"6px 8px"}}/>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:12,color:CN.mid,fontFamily:FB,width:36,flexShrink:0}}>Closes</span>
+                    <input type="time" value={row.close||""} onChange={e=>onChange({...schedule,[k]:{...row,close:e.target.value}})} style={{...INP,fontSize:14,padding:"6px 8px"}}/>
+                  </div>
+                  <div style={{fontSize:14,fontWeight:700,color:CN.orange,fontFamily:FH,textAlign:"right"}}>{fmtHrs(row.open,row.close)}</div>
                 </div>
               )}
+              {row.closed&&<div style={{fontSize:13,color:CN.mid,fontFamily:FB,marginTop:4}}>Not trading</div>}
             </div>
           );
         })}
@@ -339,92 +526,64 @@ function SecTimeline({store,onChange}){
 
 // ── Section 4: Seasonality with AI ───────────────────────────────
 function SecSeasonality({store,onChange}){
-  const[showAI,setShowAI]=useState(!store.aiSeasonality);
-  const[loading,setLoading]=useState(false);
-  const[error,setError]=useState("");
+  const[showAI,setShowAI]=useState(false);
   const sea=store.seasonality||{};
   const maxM=Math.max(...Object.values(sea),1);
   const seasons=Object.keys(SEASON_MONTHS);
+  const missingCtx=!store.name&&!store.address?"Complete the About section (name and location) first so Claude can give location-specific advice.":null;
 
-  const buildPrompt=()=>{
-    const about=[store.name,store.address,store.website,store.description].filter(Boolean).join(", ");
-    if(!about.trim())return null;
-    return`You are a restaurant industry analyst. Based on this restaurant, suggest seasonality multipliers for 4 seasons with explanations specific to this location and concept.
+  const buildSystemPrompt=()=>`You are a restaurant industry analyst helping calibrate seasonal revenue multipliers for ${store.name||"a new restaurant"} at ${store.address||"an undisclosed location"}.
 
-Restaurant: ${about}
+Store description: ${store.description||"No description provided."}
 Hard open date: ${store.timeline?.hardOpenDate||"not set"}
+Current multipliers — Winter:${sea.Winter} Spring:${sea.Spring} Summer:${sea.Summer} Fall:${sea.Fall} (1.0=normal, 0.8=20% below)
 
-Provide multipliers (1.0 = normal, 0.8 = 20% below normal) for Winter (Dec-Feb), Spring (Mar-May), Summer (Jun-Aug), Fall (Sep-Nov).
-
-For each season: 2-3 sentences explaining why that multiplier makes sense for THIS specific restaurant and location (climate, demographics, local events, school calendars, etc).
-
-End with a JSON block:
+Suggest revised multipliers for all four seasons with specific reasoning for THIS location (local climate, school calendars, tourism patterns, local events, demographics). Flag any risks or opportunities. End your response with a JSON block like:
 \`\`\`json
 {"Winter": 0.0, "Spring": 0.0, "Summer": 0.0, "Fall": 0.0}
 \`\`\``;
-  };
 
-  const generate=async()=>{
-    const p=buildPrompt();
-    if(!p){setError("Complete the About section (name, location, description) first.");return;}
-    setError("");
-    await callClaude(p,()=>setLoading(true),(text)=>{
-      let sug=null;const m=text.match(/```json\s*([\s\S]*?)```/);
-      if(m){try{sug=JSON.parse(m[1]);}catch{}}
-      onChange(prev=>({...deepClone(prev),aiSeasonality:{response:text,generatedAt:new Date().toISOString(),suggestion:sug},...(sug?{seasonality:sug}:{})}));
-      setLoading(false);
-    },(e)=>{setError(e);setLoading(false);});
+  const saveHistory=(history)=>{
+    // Extract latest JSON suggestion if present
+    const lastAI=[...history].reverse().find(m=>m.role==="assistant");
+    let sug=null;
+    if(lastAI){const m=lastAI.content.match(/```json\s*([\s\S]*?)```/);if(m){try{sug=JSON.parse(m[1]);}catch{}}}
+    onChange(prev=>({...deepClone(prev),
+      aiSeasonality:{history,generatedAt:new Date().toISOString(),suggestion:sug},
+      ...(sug?{seasonality:sug}:{}),
+    }));
   };
 
   return(
-    <div style={{display:"flex",gap:20,alignItems:"flex-start"}}>
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
-          {seasons.map(s=>{const sc=SEASON_CLR[s],mult=sea[s]||1,bh=Math.round((mult/maxM)*80);return(
-            <div key={s} style={{backgroundColor:sc.bg,border:`1.5px solid ${sc.border}`,borderRadius:12,padding:"14px 14px 12px"}}>
-              <div style={{fontWeight:700,fontSize:15,color:sc.text,marginBottom:10,fontFamily:FB}}>{s}</div>
-              <div style={{height:80,display:"flex",alignItems:"flex-end",marginBottom:10}}>
-                <div style={{width:"100%",height:`${bh}%`,backgroundColor:sc.text,borderRadius:"4px 4px 0 0",opacity:0.7,minHeight:4,transition:"height 0.3s"}}/>
-              </div>
-              <input type="number" min="0.1" max="2" step="0.05" value={mult}
-                onChange={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)&&v>0)onChange(p=>({...deepClone(p),seasonality:{...p.seasonality,[s]:v}}));}}
-                style={{...INP,textAlign:"center",fontWeight:700,fontSize:18,padding:"7px"}}/>
-              <div style={{fontSize:13,color:sc.text,textAlign:"center",marginTop:5,fontFamily:FB}}>{Math.round(mult*100)}% of base</div>
-              <div style={{fontSize:12,color:CN.mid,textAlign:"center",marginTop:2,fontFamily:FB}}>{SEASON_MONTHS[s].map(m=>MN[m]).join(", ")}</div>
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
+        {seasons.map(s=>{const sc=SEASON_CLR[s],mult=sea[s]||1,bh=Math.round((mult/maxM)*80);return(
+          <div key={s} style={{backgroundColor:sc.bg,border:`1.5px solid ${sc.border}`,borderRadius:12,padding:"14px 14px 12px"}}>
+            <div style={{fontWeight:700,fontSize:15,color:sc.text,marginBottom:10,fontFamily:FB}}>{s}</div>
+            <div style={{height:64,display:"flex",alignItems:"flex-end",marginBottom:10}}>
+              <div style={{width:"100%",height:`${Math.max(bh,4)}%`,backgroundColor:sc.text,borderRadius:"4px 4px 0 0",opacity:0.7,transition:"height 0.3s"}}/>
             </div>
-          );})}
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-          <Btn variant="ai" onClick={()=>setShowAI(v=>!v)}>
-            <span>✨</span>{showAI?"Close AI Panel":store.aiSeasonality?"View AI Suggestion":"Check with AI"}
-          </Btn>
-          {store.aiSeasonality&&<span style={{fontSize:13,color:CN.mid,fontFamily:FB}}>Last generated {fmtDate(store.aiSeasonality.generatedAt?.split("T")[0])}</span>}
-        </div>
+            <input type="number" min="0.1" max="2" step="0.05" value={mult}
+              onChange={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)&&v>0)onChange(p=>({...deepClone(p),seasonality:{...p.seasonality,[s]:v}}));}}
+              style={{...INP,textAlign:"center",fontWeight:700,fontSize:18,padding:"7px"}}/>
+            <div style={{fontSize:13,color:sc.text,textAlign:"center",marginTop:5,fontFamily:FB}}>{Math.round(mult*100)}% of base</div>
+            <div style={{fontSize:11,color:CN.mid,textAlign:"center",marginTop:2,fontFamily:FB}}>{SEASON_MONTHS[s].map(m=>MN[m]).join(", ")}</div>
+          </div>
+        );})}
       </div>
-      {showAI&&(
-        <AIPanel title="AI Seasonality" onClose={()=>setShowAI(false)}>
-          {!store.aiSeasonality&&!loading&&(<>
-            <p style={{fontSize:14,color:CN.mid,fontFamily:FB,lineHeight:1.6,marginBottom:14}}>Claude will analyse your store location and concept to suggest seasonality multipliers based on local climate, tourism, and dining patterns.</p>
-            {error&&<InfoBox type="alert">{error}</InfoBox>}
-            <Btn onClick={generate} disabled={loading}>Generate Suggestion</Btn>
-          </>)}
-          {loading&&<div style={{textAlign:"center",padding:24}}><div style={{fontSize:28,marginBottom:8}}>⟳</div><div style={{fontSize:14,color:CN.mid,fontFamily:FB}}>Analysing your location…</div></div>}
-          {store.aiSeasonality&&!loading&&(<>
-            <div style={{fontSize:14,color:CN.dark,fontFamily:FB,lineHeight:1.7,whiteSpace:"pre-wrap",marginBottom:14}}>{store.aiSeasonality.response.replace(/```json[\s\S]*?```/g,"").trim()}</div>
-            {store.aiSeasonality.suggestion&&(
-              <div style={{backgroundColor:CN.creamDark,borderRadius:8,padding:12,marginBottom:12}}>
-                <div style={{fontSize:12,fontWeight:700,color:CN.mid,textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:FB,marginBottom:8}}>Suggested Multipliers</div>
-                {Object.entries(store.aiSeasonality.suggestion).map(([s,v])=>(
-                  <div key={s} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:14,fontFamily:FB}}><span style={{color:CN.dark}}>{s}</span><span style={{fontWeight:700,color:CN.orange}}>{v}×</span></div>
-                ))}
-                <Btn onClick={()=>onChange(p=>({...deepClone(p),seasonality:store.aiSeasonality.suggestion}))} style={{marginTop:10,width:"100%",fontSize:13,padding:"7px"}}>Apply These Multipliers</Btn>
-              </div>
-            )}
-            {error&&<InfoBox type="alert">{error}</InfoBox>}
-            <Btn variant="secondary" onClick={generate} disabled={loading} style={{width:"100%",fontSize:13,padding:"7px"}}>{loading?"Regenerating…":"Generate New Suggestion"}</Btn>
-          </>)}
-        </AIPanel>
-      )}
+      <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+        <Btn variant="ai" onClick={()=>setShowAI(true)}>
+          <span>✨</span>{store.aiSeasonality?"View / Continue AI Chat":"Check with AI"}
+        </Btn>
+        {store.aiSeasonality&&<span style={{fontSize:13,color:CN.mid,fontFamily:FB}}>Saved {fmtDate(store.aiSeasonality.generatedAt?.split("T")[0])}</span>}
+        {store.aiSeasonality?.suggestion&&(
+          <button onClick={()=>onChange(p=>({...deepClone(p),seasonality:store.aiSeasonality.suggestion}))}
+            style={{fontSize:13,padding:"5px 12px",borderRadius:8,border:`1.5px solid ${CN.green}`,backgroundColor:CN.greenLight,color:CN.green,cursor:"pointer",fontFamily:FB,fontWeight:600}}>
+            Apply saved suggestion
+          </button>
+        )}
+      </div>
+      {showAI&&<ChatPanel title="Seasonality Analysis" systemPrompt={buildSystemPrompt()} savedHistory={store.aiSeasonality?.history||[]} onSaveHistory={saveHistory} onClose={()=>setShowAI(false)} missingContext={missingCtx}/>}
     </div>
   );
 }
@@ -496,94 +655,61 @@ function SecScenarios({store,onChange}){
 // ── Section 6: Acquisition with AI ───────────────────────────────
 function SecAcquisition({store,onChange}){
   const[showAI,setShowAI]=useState(false);
-  const[loading,setLoading]=useState(false);
-  const[error,setError]=useState("");
   const loc=store.address||"the local area";
   const profs=store.acquisitionProfiles||{};
+  const missingCtx=!store.name&&!store.address?"Complete the About section first.":null;
 
-  const buildPrompt=()=>{
-    const about=[store.name,store.address,store.website,store.description].filter(Boolean).join(", ");
-    if(!about.trim())return null;
-    return`You are a restaurant industry analyst. Assess and suggest opening-month transaction volumes for this restaurant across three acquisition scenarios.
+  const buildSystemPrompt=()=>`You are a restaurant industry analyst helping ${store.name||"a new restaurant"} at ${store.address||"an undisclosed location"} estimate opening-month transaction volumes.
 
-Restaurant: ${about}
+Store description: ${store.description||"No description provided."}
 Hard open date: ${store.timeline?.hardOpenDate||"not set"}
-Current estimates: Low=${profs.Low?.baseTransactions}, Mid=${profs.Mid?.baseTransactions}, High=${profs.High?.baseTransactions} transactions/month
+Current estimates — Low:${profs.Low?.baseTransactions} Mid:${profs.Mid?.baseTransactions} High:${profs.High?.baseTransactions} transactions/month
+(Based on ${loc} household data × capture rate)
 
-For each scenario provide:
-1. Your recommended monthly transaction volume for ${loc}
-2. The implied daily transaction rate and weekly equivalent
-3. Key assumptions: estimated households within 3-mile radius, capture rate %, visit frequency
-4. Sources: cite specific census data, industry benchmarks, comparable restaurant openings
+For each scenario:
+1. Recommended monthly transaction volume for this location
+2. Implied daily rate and weekly equivalent
+3. Key assumptions: households in trade area, capture rate %, visit frequency
+4. Benchmarks and references (census data, NRA, Toast, comparable openings)
 
-Be specific to ${loc}. Include real data and references where possible.
+End with a JSON block: \`\`\`json\n{"Low": 0, "Mid": 0, "High": 0}\n\`\`\``;
 
-End with a JSON block:
-\`\`\`json
-{"Low": 0, "Mid": 0, "High": 0}
-\`\`\``;
-  };
-
-  const generate=async()=>{
-    const p=buildPrompt();
-    if(!p){setError("Complete the About section first.");return;}
-    setError("");
-    await callClaude(p,()=>setLoading(true),(text)=>{
-      let sug=null;const m=text.match(/```json\s*([\s\S]*?)```/);
-      if(m){try{sug=JSON.parse(m[1]);}catch{}}
-      onChange(prev=>({...deepClone(prev),aiAcquisition:{response:text,generatedAt:new Date().toISOString(),suggestion:sug}}));
-      setLoading(false);
-    },(e)=>{setError(e);setLoading(false);});
+  const saveHistory=(history)=>{
+    const lastAI=[...history].reverse().find(m=>m.role==="assistant");
+    let sug=null;
+    if(lastAI){const m=lastAI.content.match(/```json\s*([\s\S]*?)```/);if(m){try{sug=JSON.parse(m[1]);}catch{}}}
+    onChange(prev=>({...deepClone(prev),aiAcquisition:{history,generatedAt:new Date().toISOString(),suggestion:sug}}));
   };
 
   return(
-    <div style={{display:"flex",gap:20,alignItems:"flex-start"}}>
-      <div style={{flex:1,minWidth:0}}>
-        <InfoBox>Base transaction volume at opening month for each acquisition level. Derived from <strong>{loc}</strong> household data × estimated capture rate.</InfoBox>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16}}>
-          {ACQL.map(pk=>{const p=profs[pk]||{};return(
-            <div key={pk} style={{backgroundColor:ACBG[pk],border:`1.5px solid ${ACLR[pk]}30`,borderRadius:12,padding:16}}>
-              <div style={{fontSize:14,fontWeight:700,color:ACLR[pk],marginBottom:10,fontFamily:FB}}>{pk} Acquisition</div>
-              <FG label="Base Transactions / Month">
-                <input type="number" min="1" step="10" value={p.baseTransactions||""}
-                  onChange={e=>onChange(prev=>({...deepClone(prev),acquisitionProfiles:{...prev.acquisitionProfiles,[pk]:{...p,baseTransactions:parseInt(e.target.value)||0}}}))}
-                  style={{...INP,fontWeight:700,fontSize:18,textAlign:"center"}}/>
-              </FG>
-              <div style={{fontSize:13,color:CN.mid,fontFamily:FB}}>≈ {Math.round((p.baseTransactions||0)/30)} tx/day · {Math.round((p.baseTransactions||0)/4.33)} tx/week</div>
-            </div>
-          );})}
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-          <Btn variant="ai" onClick={()=>setShowAI(v=>!v)}>
-            <span>✨</span>{showAI?"Close AI Panel":store.aiAcquisition?"View AI Analysis":"Check with AI"}
-          </Btn>
-          {store.aiAcquisition&&<span style={{fontSize:13,color:CN.mid,fontFamily:FB}}>Last generated {fmtDate(store.aiAcquisition.generatedAt?.split("T")[0])}</span>}
-        </div>
+    <div>
+      <InfoBox>Base transaction volume at opening month for each acquisition level. Derived from <strong>{loc}</strong> household data × estimated capture rate.</InfoBox>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16}}>
+        {ACQL.map(pk=>{const p=profs[pk]||{};return(
+          <div key={pk} style={{backgroundColor:ACBG[pk],border:`1.5px solid ${ACLR[pk]}40`,borderRadius:12,padding:16}}>
+            <div style={{fontSize:14,fontWeight:700,color:ACLR[pk],marginBottom:10,fontFamily:FB}}>{pk} Acquisition</div>
+            <FG label="Base Transactions / Month">
+              <input type="number" min="1" step="10" value={p.baseTransactions||""}
+                onChange={e=>onChange(prev=>({...deepClone(prev),acquisitionProfiles:{...prev.acquisitionProfiles,[pk]:{...p,baseTransactions:parseInt(e.target.value)||0}}}))}
+                style={{...INP,fontWeight:700,fontSize:18,textAlign:"center"}}/>
+            </FG>
+            <div style={{fontSize:13,color:CN.mid,fontFamily:FB}}>≈ {Math.round((p.baseTransactions||0)/30)} tx/day</div>
+          </div>
+        );})}
       </div>
-      {showAI&&(
-        <AIPanel title="AI Acquisition Analysis" onClose={()=>setShowAI(false)}>
-          {!store.aiAcquisition&&!loading&&(<>
-            <p style={{fontSize:14,color:CN.mid,fontFamily:FB,lineHeight:1.6,marginBottom:14}}>Claude will estimate {loc} household counts, capture rates, and suggest opening transaction volumes with supporting references.</p>
-            {error&&<InfoBox type="alert">{error}</InfoBox>}
-            <Btn onClick={generate} disabled={loading}>Generate Analysis</Btn>
-          </>)}
-          {loading&&<div style={{textAlign:"center",padding:24}}><div style={{fontSize:28,marginBottom:8}}>⟳</div><div style={{fontSize:14,color:CN.mid,fontFamily:FB}}>Analysing market data…</div></div>}
-          {store.aiAcquisition&&!loading&&(<>
-            <div style={{fontSize:14,color:CN.dark,fontFamily:FB,lineHeight:1.7,whiteSpace:"pre-wrap",marginBottom:14}}>{store.aiAcquisition.response.replace(/```json[\s\S]*?```/g,"").trim()}</div>
-            {store.aiAcquisition.suggestion&&(
-              <div style={{backgroundColor:CN.creamDark,borderRadius:8,padding:12,marginBottom:12}}>
-                <div style={{fontSize:12,fontWeight:700,color:CN.mid,textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:FB,marginBottom:8}}>Suggested Volumes</div>
-                {Object.entries(store.aiAcquisition.suggestion).map(([k,v])=>(
-                  <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:14,fontFamily:FB}}><span style={{color:CN.dark}}>{k} Acquisition</span><span style={{fontWeight:700,color:CN.orange}}>{(v||0).toLocaleString()} tx/mo</span></div>
-                ))}
-                <Btn onClick={()=>onChange(prev=>({...deepClone(prev),acquisitionProfiles:{Low:{...prev.acquisitionProfiles.Low,baseTransactions:store.aiAcquisition.suggestion.Low},Mid:{...prev.acquisitionProfiles.Mid,baseTransactions:store.aiAcquisition.suggestion.Mid},High:{...prev.acquisitionProfiles.High,baseTransactions:store.aiAcquisition.suggestion.High}}}))} style={{marginTop:10,width:"100%",fontSize:13,padding:"7px"}}>Apply These Values</Btn>
-              </div>
-            )}
-            {error&&<InfoBox type="alert">{error}</InfoBox>}
-            <Btn variant="secondary" onClick={generate} disabled={loading} style={{width:"100%",fontSize:13,padding:"7px"}}>{loading?"Regenerating…":"Generate New Analysis"}</Btn>
-          </>)}
-        </AIPanel>
-      )}
+      <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+        <Btn variant="ai" onClick={()=>setShowAI(true)}>
+          <span>✨</span>{store.aiAcquisition?"View / Continue AI Chat":"Check with AI"}
+        </Btn>
+        {store.aiAcquisition&&<span style={{fontSize:13,color:CN.mid,fontFamily:FB}}>Saved {fmtDate(store.aiAcquisition.generatedAt?.split("T")[0])}</span>}
+        {store.aiAcquisition?.suggestion&&(
+          <button onClick={()=>onChange(prev=>({...deepClone(prev),acquisitionProfiles:{Low:{...prev.acquisitionProfiles.Low,baseTransactions:store.aiAcquisition.suggestion.Low},Mid:{...prev.acquisitionProfiles.Mid,baseTransactions:store.aiAcquisition.suggestion.Mid},High:{...prev.acquisitionProfiles.High,baseTransactions:store.aiAcquisition.suggestion.High}}}))}
+            style={{fontSize:13,padding:"5px 12px",borderRadius:8,border:`1.5px solid ${CN.green}`,backgroundColor:CN.greenLight,color:CN.green,cursor:"pointer",fontFamily:FB,fontWeight:600}}>
+            Apply saved values
+          </button>
+        )}
+      </div>
+      {showAI&&<ChatPanel title="Acquisition Analysis" systemPrompt={buildSystemPrompt()} savedHistory={store.aiAcquisition?.history||[]} onSaveHistory={saveHistory} onClose={()=>setShowAI(false)} missingContext={missingCtx}/>}
     </div>
   );
 }
@@ -592,104 +718,73 @@ End with a JSON block:
 function SecGrowth({store,onChange}){
   const[showAI,setShowAI]=useState(false);
   const[expanded,setExpanded]=useState(null);
-  const[loading,setLoading]=useState(false);
-  const[error,setError]=useState("");
   const gp=store.growthProfiles||{};
+  const missingCtx=!store.name&&!store.address?"Complete the About section first.":null;
 
-  const buildPrompt=()=>{
-    const about=[store.name,store.address,store.description].filter(Boolean).join(", ");
-    if(!about.trim())return null;
-    const ps=Object.entries(gp).map(([k,p])=>`${k} Growth: peak ${Math.round(Math.max(...p.rampRates.slice(1))*100)}%/mo, stabilises at ${(p.stabilisedRate*100).toFixed(1)}%/mo`).join("; ");
-    return`You are a restaurant industry growth analyst. Evaluate these growth rate assumptions for a new restaurant.
+  const buildSystemPrompt=()=>{
+    const ps=Object.entries(gp).map(([k,p])=>`${k} Growth: peak ${Math.round(Math.max(...(p.rampRates||[0]).slice(1))*100)}%/mo, stabilises at ${((p.stabilisedRate||0)*100).toFixed(1)}%/mo`).join("; ");
+    return`You are a restaurant industry growth analyst evaluating growth rate assumptions for ${store.name||"a new restaurant"} at ${store.address||"an undisclosed location"}.
 
-Restaurant: ${about}
-Growth assumptions: ${ps}
+Store description: ${store.description||"No description provided."}
 Mid acquisition base: ${store.acquisitionProfiles?.Mid?.baseTransactions||"not set"} transactions/month
+Growth assumptions: ${ps}
 
-Assess:
-1. Whether each profile is realistic, aggressive, or conservative for this concept and location
-2. Any recommended adjustments with specific reasoning
-3. Key risks to these growth assumptions
-4. Industry benchmark references (NRA, 7shifts, Toast, or other credible restaurant data sources)
-
-Be specific and cite real data where possible.`;
+Assess whether each profile is realistic, aggressive, or conservative for this concept and location. Suggest any adjustments. Flag key risks. Cite industry benchmarks (NRA, 7shifts, Toast, or comparable openings).`;
   };
 
-  const generate=async()=>{
-    const p=buildPrompt();
-    if(!p){setError("Complete the About section first.");return;}
-    setError("");
-    await callClaude(p,()=>setLoading(true),(text)=>{
-      onChange(prev=>({...deepClone(prev),aiGrowth:{response:text,generatedAt:new Date().toISOString()}}));
-      setLoading(false);
-    },(e)=>{setError(e);setLoading(false);});
+  const saveHistory=(history)=>{
+    onChange(prev=>({...deepClone(prev),aiGrowth:{history,generatedAt:new Date().toISOString()}}));
   };
 
   const updRate=(pk,i,v)=>onChange(prev=>{const n=deepClone(prev);n.growthProfiles[pk].rampRates[i]=parseFloat(v)||0;return n;});
   const updStable=(pk,v)=>onChange(prev=>{const n=deepClone(prev);n.growthProfiles[pk].stabilisedRate=parseFloat(v)||0;return n;});
 
   return(
-    <div style={{display:"flex",gap:20,alignItems:"flex-start"}}>
-      <div style={{flex:1,minWidth:0}}>
-        <InfoBox>Month-on-month growth applied to transaction volume. Month 1 = opening month (rate = 0, base). After month 12, the stabilised rate applies indefinitely.</InfoBox>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16}}>
-          {ACQL.map(pk=>{
-            const p=gp[pk]||{},isOpen=expanded===pk,maxR=Math.max(...(p.rampRates||[]).slice(1),0.01);
-            return(
-              <div key={pk} style={{border:`1.5px solid ${isOpen?ACLR[pk]:CN.border}`,borderRadius:12,overflow:"hidden",backgroundColor:isOpen?CN.white:CN.creamDark,transition:"all 0.2s"}}>
-                <button onClick={()=>setExpanded(isOpen?null:pk)} style={{width:"100%",padding:"12px 14px",background:"none",border:"none",cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div>
-                    <div style={{fontWeight:700,fontSize:15,color:ACLR[pk],fontFamily:FB}}>{p.label||pk}</div>
-                    <div style={{fontSize:13,color:CN.mid,marginTop:2,fontFamily:FB}}>Peak {Math.round(maxR*100)}% · Stable {((p.stabilisedRate||0)*100).toFixed(1)}%/mo</div>
-                  </div>
-                  <span style={{fontSize:13,color:CN.mid}}>{isOpen?"▲":"▼"}</span>
-                </button>
-                <div style={{padding:"0 14px 12px",display:"flex",gap:2,alignItems:"flex-end",height:32}}>
-                  {(p.rampRates||[]).slice(1).map((r,i)=><div key={i} style={{flex:1,backgroundColor:ACBG[pk],borderRadius:"2px 2px 0 0",height:`${Math.round((r/maxR)*100)}%`,minHeight:2,border:`1px solid ${ACLR[pk]}`,opacity:0.6}}/>)}
+    <div>
+      <InfoBox>Month-on-month growth applied to transaction volume. Month 1 = opening month (rate = 0, base). After month 12, the stabilised rate applies indefinitely.</InfoBox>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16}}>
+        {ACQL.map(pk=>{
+          const p=gp[pk]||{},isOpen=expanded===pk,maxR=Math.max(...(p.rampRates||[0]).slice(1),0.01);
+          return(
+            <div key={pk} style={{border:`1.5px solid ${isOpen?ACLR[pk]:CN.border}`,borderRadius:12,overflow:"hidden",backgroundColor:isOpen?CN.white:CN.creamDark,transition:"all 0.2s"}}>
+              <button onClick={()=>setExpanded(isOpen?null:pk)} style={{width:"100%",padding:"12px 14px",background:"none",border:"none",cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{fontWeight:700,fontSize:15,color:ACLR[pk],fontFamily:FB}}>{p.label||pk}</div>
+                  <div style={{fontSize:13,color:CN.mid,marginTop:2,fontFamily:FB}}>Peak {Math.round(maxR*100)}% · Stable {((p.stabilisedRate||0)*100).toFixed(1)}%/mo</div>
                 </div>
-                {isOpen&&(
-                  <div style={{padding:"12px 14px 14px",borderTop:`1px solid ${CN.border}`}}>
-                    <div style={{fontSize:12,fontWeight:700,color:CN.mid,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8,fontFamily:FB}}>Monthly growth rates</div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"5px 10px"}}>
-                      {(p.rampRates||[]).map((r,i)=>(
-                        <div key={i} style={{display:"flex",alignItems:"center",gap:6}}>
-                          <span style={{fontSize:13,color:CN.mid,width:40,flexShrink:0,fontFamily:FB}}>Mo {i+1}</span>
-                          <input type="number" step="0.01" min="0" max="2" value={r} disabled={i===0} onChange={e=>updRate(pk,i,e.target.value)} style={{...INP,padding:"4px 7px",fontSize:13,textAlign:"right",opacity:i===0?0.4:1}}/>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{marginTop:10,display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{fontSize:13,color:CN.mid,flex:1,fontFamily:FB}}>Stabilised rate (Mo 13+)</span>
-                      <input type="number" step="0.001" min="0" max="0.1" value={p.stabilisedRate||0} onChange={e=>updStable(pk,e.target.value)} style={{...INP,padding:"4px 7px",fontSize:13,width:90,textAlign:"right"}}/>
-                    </div>
-                  </div>
-                )}
+                <span style={{fontSize:13,color:CN.mid}}>{isOpen?"▲":"▼"}</span>
+              </button>
+              <div style={{padding:"0 14px 12px",display:"flex",gap:2,alignItems:"flex-end",height:32}}>
+                {(p.rampRates||[]).slice(1).map((r,i)=><div key={i} style={{flex:1,backgroundColor:ACBG[pk],borderRadius:"2px 2px 0 0",height:`${Math.round((r/maxR)*100)}%`,minHeight:2,border:`1px solid ${ACLR[pk]}`,opacity:0.6}}/>)}
               </div>
-            );
-          })}
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-          <Btn variant="ai" onClick={()=>setShowAI(v=>!v)}>
-            <span>✨</span>{showAI?"Close AI Panel":store.aiGrowth?"View AI Evaluation":"Check with AI"}
-          </Btn>
-          {store.aiGrowth&&<span style={{fontSize:13,color:CN.mid,fontFamily:FB}}>Last evaluated {fmtDate(store.aiGrowth.generatedAt?.split("T")[0])}</span>}
-        </div>
+              {isOpen&&(
+                <div style={{padding:"12px 14px 14px",borderTop:`1px solid ${CN.border}`}}>
+                  <div style={{fontSize:12,fontWeight:700,color:CN.mid,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8,fontFamily:FB}}>Monthly growth rates</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"5px 10px"}}>
+                    {(p.rampRates||[]).map((r,i)=>(
+                      <div key={i} style={{display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{fontSize:13,color:CN.mid,width:40,flexShrink:0,fontFamily:FB}}>Mo {i+1}</span>
+                        <input type="number" step="0.01" min="0" max="2" value={r} disabled={i===0} onChange={e=>updRate(pk,i,e.target.value)} style={{...INP,padding:"4px 7px",fontSize:13,textAlign:"right",opacity:i===0?0.4:1}}/>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{marginTop:10,display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:13,color:CN.mid,flex:1,fontFamily:FB}}>Stabilised rate (Mo 13+)</span>
+                    <input type="number" step="0.001" min="0" max="0.1" value={p.stabilisedRate||0} onChange={e=>updStable(pk,e.target.value)} style={{...INP,padding:"4px 7px",fontSize:13,width:90,textAlign:"right"}}/>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
-      {showAI&&(
-        <AIPanel title="AI Growth Evaluation" onClose={()=>setShowAI(false)}>
-          {!store.aiGrowth&&!loading&&(<>
-            <p style={{fontSize:14,color:CN.mid,fontFamily:FB,lineHeight:1.6,marginBottom:14}}>Claude will evaluate your growth assumptions against QSR and fast-casual industry benchmarks.</p>
-            {error&&<InfoBox type="alert">{error}</InfoBox>}
-            <Btn onClick={generate} disabled={loading}>Evaluate Growth Rates</Btn>
-          </>)}
-          {loading&&<div style={{textAlign:"center",padding:24}}><div style={{fontSize:28,marginBottom:8}}>⟳</div><div style={{fontSize:14,color:CN.mid,fontFamily:FB}}>Evaluating growth assumptions…</div></div>}
-          {store.aiGrowth&&!loading&&(<>
-            <div style={{fontSize:14,color:CN.dark,fontFamily:FB,lineHeight:1.7,whiteSpace:"pre-wrap",marginBottom:14}}>{store.aiGrowth.response}</div>
-            {error&&<InfoBox type="alert">{error}</InfoBox>}
-            <Btn variant="secondary" onClick={generate} disabled={loading} style={{width:"100%",fontSize:13,padding:"7px"}}>{loading?"Re-evaluating…":"Re-evaluate"}</Btn>
-          </>)}
-        </AIPanel>
-      )}
+      <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+        <Btn variant="ai" onClick={()=>setShowAI(true)}>
+          <span>✨</span>{store.aiGrowth?"View / Continue AI Chat":"Check with AI"}
+        </Btn>
+        {store.aiGrowth&&<span style={{fontSize:13,color:CN.mid,fontFamily:FB}}>Saved {fmtDate(store.aiGrowth.generatedAt?.split("T")[0])}</span>}
+      </div>
+      {showAI&&<ChatPanel title="Growth Profile Analysis" systemPrompt={buildSystemPrompt()} savedHistory={store.aiGrowth?.history||[]} onSaveHistory={saveHistory} onClose={()=>setShowAI(false)} missingContext={missingCtx}/>}
     </div>
   );
 }
