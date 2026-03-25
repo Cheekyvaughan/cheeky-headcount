@@ -227,7 +227,10 @@ const STATUS={
 // ── Storage helpers ───────────────────────────────────────────────
 async function loadS(key,fallback){try{const r=await window.storage.get(key);return r?JSON.parse(r.value):fallback;}catch{return fallback;}}
 async function loadSWithTs(key,fallback){try{const r=await window.storage.get(key);return r?{value:JSON.parse(r.value),updated_at:r.updated_at||null}:{value:fallback,updated_at:null};}catch{return{value:fallback,updated_at:null};}}
-async function saveS(key,val){try{await window.storage.set(key,JSON.stringify(val));}catch{}}
+async function saveS(key,val){
+  if(!key||val===undefined)return;
+  try{await window.storage.set(key,JSON.stringify(val));}catch(e){console.error("saveS failed:",key,e);}
+}
 
 // ── Primitives ────────────────────────────────────────────────────
 const CAT_STYLE={
@@ -2107,12 +2110,6 @@ export default function App({currentUser}){
     setStores(storesData);
     setPeriods(perData);
     if(storesData.length>0){
-      const configs={};
-      await Promise.all(storesData.map(async s=>{
-        const cfg=await loadS(`cn-store-config-${s.id}-v1`,null);
-        configs[s.id]=cfg||deepClone(DEFAULT_STORE_CONFIG);
-      }));
-      setStoreConfigs(configs);
       setActiveStoreId(storesData[0].id);
     }
     }catch(e){console.error("loadAll error:",e);}
@@ -2137,10 +2134,12 @@ export default function App({currentUser}){
   const savePlans=()=>doSave("plans",[{key:SK.planScenarios,val:planScenarios,setSaved:setSavedPS}]);
   const saveSettings=()=>doSave("settings",[{key:SHARED_SK.taxYears,val:taxYears,setSaved:setSavedTaxYears},{key:SHARED_SK.ot,val:ot,setSaved:setSavedOt}]);
   const saveStoresList=useCallback(async(storesList)=>{
+    const toSave=storesList??stores;
+    if(!toSave)return;
     setSavingStores(true);
-    await saveS(SHARED_SK.stores,storesList);
+    await saveS(SHARED_SK.stores,toSave);
     setSavingStores(false);
-  },[]);
+  },[stores]);
   const saveStoreConfig=useCallback(async(storeId,config)=>{
     setSavingStoreConfig(true);
     await saveS(`cn-store-config-${storeId}-v1`,config);
