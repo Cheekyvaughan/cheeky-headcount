@@ -243,8 +243,8 @@ const STATUS={
 };
 
 // ── Storage helpers ───────────────────────────────────────────────
-async function loadS(key,fallback){try{const r=await window.storage.get(key);return r?JSON.parse(r.value):fallback;}catch{return fallback;}}
-async function loadSWithTs(key,fallback){try{const r=await window.storage.get(key);return r?{value:JSON.parse(r.value),updated_at:r.updated_at||null}:{value:fallback,updated_at:null};}catch{return{value:fallback,updated_at:null};}}
+async function loadS(key,fallback){try{const r=await window.storage.get(key);if(!r||r.value===null||r.value===undefined)return fallback;const parsed=JSON.parse(r.value);return parsed??fallback;}catch{return fallback;}}
+async function loadSWithTs(key,fallback){try{const r=await window.storage.get(key);if(!r||r.value===null||r.value===undefined)return{value:fallback,updated_at:null};const parsed=JSON.parse(r.value);return{value:parsed??fallback,updated_at:r.updated_at||null};}catch{return{value:fallback,updated_at:null};}}
 async function saveS(key,val){
   if(!key||val===undefined)return;
   try{await window.storage.set(key,JSON.stringify(val));}catch(e){console.error("saveS failed:",key,e);}
