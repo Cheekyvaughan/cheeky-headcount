@@ -1361,7 +1361,7 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
   const NavBar=({nextLabel,nextDisabled,onNext})=>(
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:28,paddingTop:20,borderTop:`1px solid ${CN.border}`}}>
       <button onClick={()=>currentStep>1&&setCurrentStep(s=>s-1)} style={{padding:"9px 18px",borderRadius:10,border:`1.5px solid ${CN.border}`,backgroundColor:CN.white,color:currentStep===1?CN.border:CN.mid,cursor:currentStep===1?"not-allowed":"pointer",fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}} disabled={currentStep===1}>← Back</button>
-      {currentStep<TOTAL_STEPS&&<button onClick={onNext||()=>setCurrentStep(s=>s+1)} disabled={nextDisabled} style={{padding:"9px 22px",borderRadius:10,border:"none",backgroundColor:nextDisabled?CN.border:CN.orange,color:CN.white,cursor:nextDisabled?"not-allowed":"pointer",fontSize:13,fontWeight:700,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",letterSpacing:"0.06em",transition:"all 0.15s"}}>{nextLabel||"Next →"}</button>}
+      {currentStep<TOTAL_STEPS&&<button onClick={onNext||(()=>setCurrentStep(s=>s+1))} disabled={nextDisabled} style={{padding:"9px 22px",borderRadius:10,border:"none",backgroundColor:nextDisabled?CN.border:CN.orange,color:CN.white,cursor:nextDisabled?"not-allowed":"pointer",fontSize:13,fontWeight:700,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",letterSpacing:"0.06em",transition:"all 0.15s"}}>{nextLabel||"Next →"}</button>}
     </div>
   );
 
