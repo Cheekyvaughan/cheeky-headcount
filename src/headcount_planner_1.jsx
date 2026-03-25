@@ -21,17 +21,29 @@ function useIsMobile() {
 // ── Storage: backed by D1 via Worker ─────────────────────────────
 const STORAGE_WORKER = "https://cheeky-headcount-proxy.vaughan-184.workers.dev";
 
-// Wait up to 5s for Clerk to expose _clerkGetToken, then get the token.
+// Token cache — reuse for 60s to avoid hammering Clerk on every request
+let _cachedToken = null;
+let _tokenExpiry = 0;
+
 async function getToken() {
+  const now = Date.now();
+  if (_cachedToken && now < _tokenExpiry) return _cachedToken;
+
+  // Poll up to 5s for Clerk to be ready
   for (let i = 0; i < 50; i++) {
     if (typeof window._clerkGetToken === "function") {
       try {
         const t = await window._clerkGetToken();
-        if (t) return t;
+        if (t) {
+          _cachedToken = t;
+          _tokenExpiry = now + 55_000; // cache 55s (JWT expires every 60s)
+          return t;
+        }
       } catch {}
     }
     await new Promise(r => setTimeout(r, 100));
   }
+  console.warn("getToken: timed out waiting for Clerk token");
   return null;
 }
 
@@ -44,15 +56,21 @@ async function storageFetch(action, body) {
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error(`storage ${action} failed: ${res.status}`);
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        console.warn(`D1 ${action} failed ${res.status}:`, detail);
+        throw new Error(`${res.status}`);
+      }
       return await res.json();
     } catch (e) {
       console.warn("D1 storage error, falling back to localStorage:", e.message);
+      // Clear token cache on auth errors so next call re-fetches
+      if (e.message === "401") { _cachedToken = null; _tokenExpiry = 0; }
     }
   } else {
-    console.warn("No Clerk token available for storage, falling back to localStorage");
+    console.warn("No Clerk token — using localStorage fallback");
   }
-  // localStorage fallback (dev / offline only)
+  // localStorage fallback
   if (action === "get") {
     const v = localStorage.getItem(body.key);
     return v ? { value: v } : { value: null };
