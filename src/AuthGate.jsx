@@ -33,7 +33,7 @@ export function AuthGate({ children }) {
             Cheeky Noodles
           </div>
           <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 14, color: '#7A6A58', marginTop: 4 }}>
-            Headcount Planner — sign in with your @cheekynoodles.com account
+            Cheeky Forecaster — sign in with your @cheekynoodles.com account
           </div>
         </div>
         <SignIn

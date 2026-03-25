@@ -1870,7 +1870,7 @@ function Sidebar({tab,navGroups,currentUser,logoUrl,setLogoUrl,isAdmin,actingAsU
             <input id="cn-logo-upload" type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>setLogoUrl(ev.target.result);reader.readAsDataURL(file);e.target.value="";}}/>
             <div>
               <div style={{fontFamily:"'Bowlby One SC',sans-serif",fontWeight:800,fontSize:15,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.9)",lineHeight:1.1}}>Cheeky Noodles</div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:1}}>Headcount Planner</div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:1}}>Cheeky Forecaster</div>
             </div>
           </div>
         </div>
