@@ -27,7 +27,7 @@ if (!window.storage) {
 
 // ── Brand palette ─────────────────────────────────────────────────
 const CN = {
-  orange: "#FF3B00", orangeHover: "#D93200", orangeLight: "#FFEDE8",
+  orange: "#FF3C00", orangeHover: "#D93200", orangeLight: "#FFEDE8",
   cream: "#FBF5DF", creamDark: "#EFE7C8",
   dark: "#3C3C37", mid: "#494843",
   border: "#EAE6E5", white: "#FFFFFF",
@@ -178,7 +178,7 @@ function Tag({cat,small}){
   return<span style={{display:"inline-block",padding:small?"1px 7px":"2px 10px",borderRadius:"99px",fontSize:small?"10px":"11px",fontWeight:700,backgroundColor:cs.bg,color:cs.text}}>{cat}</span>;
 }
 
-const baseInp={border:`1.5px solid ${CN.border}`,borderRadius:"8px",padding:"8px 12px",fontSize:"13px",width:"100%",boxSizing:"border-box",outline:"none",backgroundColor:CN.white,fontFamily:"'DM Sans',sans-serif",color:CN.dark};
+const baseInp={border:`1.5px solid ${CN.border}`,borderRadius:"8px",padding:"8px 12px",fontSize:"13px",width:"100%",boxSizing:"border-box",outline:"none",backgroundColor:CN.white,fontFamily:"'Barlow Semi Condensed',sans-serif",color:CN.dark};
 
 function Field({label,note,type="text",value,onChange,min,max,step,placeholder,style={},disabled}){
   const[foc,setFoc]=useState(false);
@@ -204,7 +204,7 @@ function Pick({label,value,onChange,options}){
 }
 
 function Btn({onClick,children,variant="primary",style={},disabled}){
-  const base={border:"none",borderRadius:"8px",padding:"8px 18px",fontSize:"12px",fontWeight:700,cursor:"pointer",letterSpacing:"0.06em",textTransform:"uppercase",fontFamily:"'Barlow Condensed',sans-serif",transition:"all 0.15s"};
+  const base={border:"none",borderRadius:"8px",padding:"8px 18px",fontSize:"12px",fontWeight:700,cursor:"pointer",letterSpacing:"0.06em",textTransform:"uppercase",fontFamily:"'Bowlby One SC',sans-serif",transition:"all 0.15s"};
   const v={
     primary:{...base,backgroundColor:CN.orange,color:CN.white},
     secondary:{...base,backgroundColor:CN.creamDark,color:CN.dark},
@@ -220,13 +220,13 @@ function Card({children,style={}}){
 
 function SHead({title,sub}){
   return<div style={{marginBottom:"20px"}}>
-    <h2 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"22px",textTransform:"uppercase",letterSpacing:"0.06em",color:CN.dark,margin:0}}>{title}</h2>
+    <h2 style={{fontFamily:"'Bowlby One SC',sans-serif",fontWeight:800,fontSize:"22px",textTransform:"uppercase",letterSpacing:"0.06em",color:CN.dark,margin:0}}>{title}</h2>
     {sub&&<p style={{fontSize:"13px",color:CN.mid,marginTop:"4px",margin:"4px 0 0"}}>{sub}</p>}
   </div>;
 }
 
 function Sub({children,style={}}){
-  return<h3 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:"15px",textTransform:"uppercase",letterSpacing:"0.06em",color:CN.dark,margin:"0 0 12px",...style}}>{children}</h3>;
+  return<h3 style={{fontFamily:"'Bowlby One SC',sans-serif",fontWeight:700,fontSize:"15px",textTransform:"uppercase",letterSpacing:"0.06em",color:CN.dark,margin:"0 0 12px",...style}}>{children}</h3>;
 }
 
 function Note({children,type="info"}){
@@ -245,7 +245,7 @@ function PageHeader({ title, subtitle, actions }) {
     }}>
       <div>
         <h1 style={{
-          fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 800, fontSize: 28,
+          fontFamily: "'Bowlby One SC',sans-serif", fontWeight: 800, fontSize: 28,
           textTransform: "uppercase", letterSpacing: "0.06em", color: CN.dark, margin: 0,
         }}>{title}</h1>
         {subtitle && <p style={{ fontSize: 13, color: CN.mid, marginTop: 4, margin: "4px 0 0" }}>{subtitle}</p>}
@@ -272,10 +272,10 @@ function SaveBar({dirty,onSave,onClear,saving,isMobile}){
         Unsaved changes
       </div>
       <div style={{display:"flex",gap:"8px"}}>
-        <button onClick={handleClear} style={{padding:"7px 14px",border:`1.5px solid ${confirmClear?CN.red:CN.border}`,borderRadius:"8px",backgroundColor:confirmClear?"#FFE0D8":CN.white,color:confirmClear?CN.red:CN.mid,fontSize:"12px",fontWeight:700,cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",letterSpacing:"0.06em"}}>
+        <button onClick={handleClear} style={{padding:"7px 14px",border:`1.5px solid ${confirmClear?CN.red:CN.border}`,borderRadius:"8px",backgroundColor:confirmClear?"#FFE0D8":CN.white,color:confirmClear?CN.red:CN.mid,fontSize:"12px",fontWeight:700,cursor:"pointer",fontFamily:"'Bowlby One SC',sans-serif",textTransform:"uppercase",letterSpacing:"0.06em"}}>
           {confirmClear?"Confirm clear":"Clear"}
         </button>
-        <button onClick={onSave} disabled={!dirty||saving} style={{padding:"7px 18px",border:"none",borderRadius:"8px",backgroundColor:dirty&&!saving?CN.orange:CN.creamDark,color:dirty&&!saving?CN.white:CN.mid,fontSize:"12px",fontWeight:700,cursor:dirty&&!saving?"pointer":"default",fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",letterSpacing:"0.06em",minWidth:"70px"}}>
+        <button onClick={onSave} disabled={!dirty||saving} style={{padding:"7px 18px",border:"none",borderRadius:"8px",backgroundColor:dirty&&!saving?CN.orange:CN.creamDark,color:dirty&&!saving?CN.white:CN.mid,fontSize:"12px",fontWeight:700,cursor:dirty&&!saving?"pointer":"default",fontFamily:"'Bowlby One SC',sans-serif",textTransform:"uppercase",letterSpacing:"0.06em",minWidth:"70px"}}>
           {saving?"Saving…":"Save"}
         </button>
       </div>
@@ -293,7 +293,7 @@ const MODAL_STYLE = {
   backgroundColor:CN.white,borderRadius:14,padding:24,
   maxWidth:380,width:"calc(100% - 40px)",
   boxShadow:"0 16px 48px rgba(0,0,0,0.2)",zIndex:2001,
-  fontFamily:"'DM Sans',sans-serif",outline:"none",
+  fontFamily:"'Barlow Semi Condensed',sans-serif",outline:"none",
 };
 
 // Reusable confirmation dialog (destructive or neutral)
@@ -304,7 +304,7 @@ function ConfirmDialog({open,onOpenChange,icon,title,description,confirmLabel="C
         <AlertDialog.Overlay style={OVERLAY_STYLE}/>
         <AlertDialog.Content style={MODAL_STYLE}>
           {icon&&<div style={{fontSize:28,marginBottom:8}}>{icon}</div>}
-          <AlertDialog.Title style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:CN.dark,marginBottom:8,textTransform:"uppercase",margin:"0 0 8px"}}>{title}</AlertDialog.Title>
+          <AlertDialog.Title style={{fontFamily:"'Bowlby One SC',sans-serif",fontWeight:800,fontSize:18,color:CN.dark,marginBottom:8,textTransform:"uppercase",margin:"0 0 8px"}}>{title}</AlertDialog.Title>
           <AlertDialog.Description asChild>
             <p style={{fontSize:13,color:CN.mid,marginBottom:20,lineHeight:1.6,margin:"0 0 20px"}}>{description}</p>
           </AlertDialog.Description>
@@ -332,7 +332,7 @@ function InputDialog({open,onOpenChange,title,placeholder,defaultValue,onConfirm
       <Dialog.Portal>
         <Dialog.Overlay style={{...OVERLAY_STYLE,zIndex:300}}/>
         <Dialog.Content style={{...MODAL_STYLE,zIndex:301,maxWidth:340}}>
-          <Dialog.Title style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:CN.dark,marginBottom:16,textTransform:"uppercase",margin:"0 0 16px"}}>{title}</Dialog.Title>
+          <Dialog.Title style={{fontFamily:"'Bowlby One SC',sans-serif",fontWeight:800,fontSize:18,color:CN.dark,marginBottom:16,textTransform:"uppercase",margin:"0 0 16px"}}>{title}</Dialog.Title>
           <input
             autoFocus value={value}
             onChange={e=>setValue(e.target.value)}
@@ -400,7 +400,7 @@ function ScenarioSelector({scenarios,activeId,onSwitch,onCreate,onDelete,onRenam
 
       <Popover.Root>
         <Popover.Trigger asChild>
-          <button style={{display:"flex",alignItems:"center",gap:8,padding:"7px 12px",backgroundColor:CN.white,border:`1.5px solid ${CN.orange}`,borderRadius:"8px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:"13px",fontWeight:600,color:CN.dark,minWidth:"160px",justifyContent:"space-between",outline:"none"}}>
+          <button style={{display:"flex",alignItems:"center",gap:8,padding:"7px 12px",backgroundColor:CN.white,border:`1.5px solid ${CN.orange}`,borderRadius:"8px",cursor:"pointer",fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:"13px",fontWeight:600,color:CN.dark,minWidth:"160px",justifyContent:"space-between",outline:"none"}}>
             <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{active?.name||"Select…"}</span>
             <span style={{fontSize:"10px",color:CN.mid,flexShrink:0}}>▼</span>
           </button>
@@ -422,7 +422,7 @@ function ScenarioSelector({scenarios,activeId,onSwitch,onCreate,onDelete,onRenam
               return(
                 <div key={s.id} style={itemHoverStyle(isActive)}>
                   <Popover.Close asChild>
-                    <button onClick={()=>onSwitch(s.id)} style={{flex:1,textAlign:"left",background:"none",border:"none",cursor:"pointer",fontSize:"13px",fontWeight:isActive?700:400,color:isActive?CN.orange:CN.dark,fontFamily:"'DM Sans',sans-serif",padding:0,outline:"none"}}>
+                    <button onClick={()=>onSwitch(s.id)} style={{flex:1,textAlign:"left",background:"none",border:"none",cursor:"pointer",fontSize:"13px",fontWeight:isActive?700:400,color:isActive?CN.orange:CN.dark,fontFamily:"'Barlow Semi Condensed',sans-serif",padding:0,outline:"none"}}>
                       {isActive?"✓ ":""}{s.name}
                     </button>
                   </Popover.Close>
@@ -475,8 +475,8 @@ function ScenarioSelector({scenarios,activeId,onSwitch,onCreate,onDelete,onRenam
   );
 }
 
-const TH={padding:"9px 8px",backgroundColor:CN.creamDark,border:`1px solid ${CN.border}`,fontSize:"10px",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",color:CN.mid,fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"};
-const TD={padding:"0",fontSize:"13px",fontFamily:"'DM Sans',sans-serif",verticalAlign:"middle",border:`1px solid ${CN.creamDark}`};
+const TH={padding:"9px 8px",backgroundColor:CN.creamDark,border:`1px solid ${CN.border}`,fontSize:"10px",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",color:CN.mid,fontFamily:"'Barlow Semi Condensed',sans-serif",whiteSpace:"nowrap"};
+const TD={padding:"0",fontSize:"13px",fontFamily:"'Barlow Semi Condensed',sans-serif",verticalAlign:"middle",border:`1px solid ${CN.creamDark}`};
 
 // ── Role Form ─────────────────────────────────────────────────────
 function RoleForm({initial,onSave,onCancel,taxForYear,ot}){
@@ -565,7 +565,7 @@ function RoleForm({initial,onSave,onCancel,taxForYear,ot}){
             ))}
             <div style={{borderLeft:`2px solid ${CN.orange}`,paddingLeft:"16px"}}>
               <div style={{fontSize:"10px",color:CN.mid}}>Total all-in</div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"24px",fontWeight:800,color:CN.orange}}>{fmt$(prev.total)}</div>
+              <div style={{fontFamily:"'Bowlby One SC',sans-serif",fontSize:"24px",fontWeight:800,color:CN.orange}}>{fmt$(prev.total)}</div>
             </div>
           </div>
         </div>
@@ -651,7 +651,7 @@ function RolesTab({roleScenarios,setRoleScenarios,taxYears,ot,dirty,onSave,onCle
                     </div>
                     <div style={{textAlign:"right",marginRight:"8px"}}>
                       <div style={{fontSize:"10px",color:CN.mid}}>Weekly all-in (1 emp.)</div>
-                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"18px",fontWeight:800,color:CN.orange}}>{fmt$(calcRowCost(role,DAYS.reduce((a,d,i)=>({...a,[d]:i<5?role.defaultHours/5:0}),{}),taxForYear||DEFAULT_TAX,ot).total)}</div>
+                      <div style={{fontFamily:"'Bowlby One SC',sans-serif",fontSize:"18px",fontWeight:800,color:CN.orange}}>{fmt$(calcRowCost(role,DAYS.reduce((a,d,i)=>({...a,[d]:i<5?role.defaultHours/5:0}),{}),taxForYear||DEFAULT_TAX,ot).total)}</div>
                     </div>
                     <div style={{display:"flex",flexDirection:"column",gap:"2px"}}>
                       <Btn variant="ghost" onClick={()=>{if(!readOnly)setEditing(role.id);}} style={{opacity:readOnly?0.3:1,cursor:readOnly?"not-allowed":"pointer",pointerEvents:readOnly?"none":"auto"}}>Edit</Btn>
@@ -756,7 +756,7 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
           </div>
           <div style={{background:`linear-gradient(135deg,${CN.orange} 0%,#FF6B3A 100%)`,borderRadius:"14px",padding:"16px 24px",marginBottom:"14px"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:"12px"}}>
-              <div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.75)",letterSpacing:"0.06em",textTransform:"uppercase"}}>Total Planned Labor Cost</div><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"34px",fontWeight:800,color:CN.white,lineHeight:1.1}}>{fmt$(totals.total)}</div></div>
+              <div><div style={{fontSize:"11px",color:"rgba(255,255,255,0.75)",letterSpacing:"0.06em",textTransform:"uppercase"}}>Total Planned Labor Cost</div><div style={{fontFamily:"'Bowlby One SC',sans-serif",fontSize:"34px",fontWeight:800,color:CN.white,lineHeight:1.1}}>{fmt$(totals.total)}</div></div>
               <div style={{display:"flex",gap:"20px",flexWrap:"wrap"}}>
                 {[["Total Hrs",totals.totalHrs.toFixed(1)+"h"],["OT Hrs",totals.otHrs>0?totals.otHrs.toFixed(1)+"h ⚡":"0h"],["Wages",fmt$(totals.wages)],["Taxes",fmt$(totals.taxes)],["Benefits",fmt$(totals.benefits)]].map(([l,v])=>(
                   <div key={l} style={{textAlign:"right"}}><div style={{fontSize:"10px",color:"rgba(255,255,255,0.7)",textTransform:"uppercase",letterSpacing:"0.04em"}}>{l}</div><div style={{fontSize:"16px",fontWeight:600,color:CN.white}}>{v}</div></div>
@@ -773,7 +773,7 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
             <div>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px",backgroundColor:CN.white,borderRadius:"12px",padding:"10px 14px",border:`1.5px solid ${CN.border}`}}>
                 <button onClick={()=>setActiveDayIdx(i=>(i+6)%7)} style={{border:"none",background:CN.creamDark,borderRadius:"8px",padding:"8px 14px",cursor:"pointer",fontSize:"16px",fontWeight:700,color:CN.dark}}>←</button>
-                <div style={{textAlign:"center"}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"20px",color:CN.dark,textTransform:"uppercase"}}>{DAY_LABELS[activeDayIdx]}</div><div style={{fontSize:"11px",color:CN.mid}}>{dayTotals[DAYS[activeDayIdx]]>0?dayTotals[DAYS[activeDayIdx]].toFixed(1)+"h total":"No hours"}</div></div>
+                <div style={{textAlign:"center"}}><div style={{fontFamily:"'Bowlby One SC',sans-serif",fontWeight:800,fontSize:"20px",color:CN.dark,textTransform:"uppercase"}}>{DAY_LABELS[activeDayIdx]}</div><div style={{fontSize:"11px",color:CN.mid}}>{dayTotals[DAYS[activeDayIdx]]>0?dayTotals[DAYS[activeDayIdx]].toFixed(1)+"h total":"No hours"}</div></div>
                 <button onClick={()=>setActiveDayIdx(i=>(i+1)%7)} style={{border:"none",background:CN.creamDark,borderRadius:"8px",padding:"8px 14px",cursor:"pointer",fontSize:"16px",fontWeight:700,color:CN.dark}}>→</button>
               </div>
               <div style={{display:"flex",gap:"6px",marginBottom:"14px",justifyContent:"center"}}>
@@ -790,17 +790,17 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
                         <div key={plan.id} style={{backgroundColor:STATUS[st].rowBg,border:`1.5px solid ${overDay?CN.red:CN.border}`,borderRadius:"10px",padding:"12px 14px",marginBottom:"8px"}}>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"10px"}}>
                             <div><div style={{fontWeight:600,fontSize:"14px",color:CN.dark}}>{STATUS[st].icon&&<span>{STATUS[st].icon} </span>}{role.name} <span style={{fontSize:"11px",color:CN.mid,fontWeight:400}}>#{empIdx+1}</span></div><div style={{fontSize:"11px",color:CN.mid}}>{role.payType==="Hourly"?`${fmt$(role.rate)}/hr`:`${fmt$(role.rate)}/mo`}</div></div>
-                            <div style={{textAlign:"right"}}><div style={{fontSize:"10px",color:CN.mid}}>Week cost</div><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"16px",fontWeight:800,color:CN.orange}}>{cost.total>0?fmt$(cost.total):"—"}</div></div>
+                            <div style={{textAlign:"right"}}><div style={{fontSize:"10px",color:CN.mid}}>Week cost</div><div style={{fontFamily:"'Bowlby One SC',sans-serif",fontSize:"16px",fontWeight:800,color:CN.orange}}>{cost.total>0?fmt$(cost.total):"—"}</div></div>
                           </div>
                           <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
                             <label style={{fontSize:"11px",fontWeight:600,color:CN.mid,textTransform:"uppercase",whiteSpace:"nowrap"}}>Hours {DAY_LABELS[activeDayIdx]}</label>
-                            <input type="number" min={0} max={24} step={0.5} value={h} placeholder="0" onChange={e=>updateDay(plan.id,activeDay,e.target.value)} style={{flex:1,textAlign:"center",border:`1.5px solid ${overDay?CN.red:CN.border}`,borderRadius:"8px",padding:"10px",fontSize:"18px",fontWeight:700,fontFamily:"'DM Sans',sans-serif",backgroundColor:overDay?"#FFE0D8":CN.white,color:overDay?CN.red:CN.dark,outline:"none",boxSizing:"border-box"}}/>
+                            <input type="number" min={0} max={24} step={0.5} value={h} placeholder="0" onChange={e=>updateDay(plan.id,activeDay,e.target.value)} style={{flex:1,textAlign:"center",border:`1.5px solid ${overDay?CN.red:CN.border}`,borderRadius:"8px",padding:"10px",fontSize:"18px",fontWeight:700,fontFamily:"'Barlow Semi Condensed',sans-serif",backgroundColor:overDay?"#FFE0D8":CN.white,color:overDay?CN.red:CN.dark,outline:"none",boxSizing:"border-box"}}/>
                             <button onClick={()=>{if(!readOnly)removeRow(plan.id);}} style={{border:`1px solid ${CN.border}`,background:CN.white,cursor:"pointer",color:CN.mid,fontSize:"13px",padding:"8px 10px",borderRadius:"8px"}}>✕</button>
                           </div>
                           {cost.otHrs>0&&<div style={{marginTop:8,fontSize:"11px",color:CN.amberDark,fontWeight:700}}>⚡ {cost.otHrs.toFixed(1)}h OT (+{fmt$(cost.otPremium)})</div>}
                         </div>
                       );})}
-                      <button onClick={()=>{if(!readOnly)addRow(role.id);}} style={{border:`1px dashed ${CN.orange}`,background:"none",cursor:"pointer",color:CN.orange,fontSize:"12px",fontWeight:700,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",padding:"8px 14px",borderRadius:"8px",width:"100%",marginBottom:"8px"}}>+ Add {role.name}</button>
+                      <button onClick={()=>{if(!readOnly)addRow(role.id);}} style={{border:`1px dashed ${CN.orange}`,background:"none",cursor:"pointer",color:CN.orange,fontSize:"12px",fontWeight:700,fontFamily:"'Bowlby One SC',sans-serif",textTransform:"uppercase",padding:"8px 14px",borderRadius:"8px",width:"100%",marginBottom:"8px"}}>+ Add {role.name}</button>
                     </div>
                   );})}
                 </div>
@@ -839,15 +839,15 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
                               </div>
                             </td>
                             {DAYS.map(d=>{const h=plan.days[d];const hNum=parseFloat(h)||0;const overDay=O.dailyMax>0&&hNum>O.dailyMax;const otherDaysTotal=role.isMinor?DAYS.filter(dd=>dd!==d).reduce((s,dd)=>s+(parseFloat(plan.days[dd])||0),0):0;const minorAtCap=role.isMinor&&(otherDaysTotal+hNum)>=MINOR_WEEKLY_MAX;const cellRed=overDay||minorAtCap;return(
-                              <td key={d} style={{...TD,padding:"5px 4px"}}><input type="number" min={0} max={role.isMinor?Math.max(0,MINOR_WEEKLY_MAX-otherDaysTotal):24} step={0.5} value={h} placeholder="–" onChange={e=>updateDay(plan.id,d,e.target.value)} style={{width:"100%",textAlign:"center",border:`1.5px solid ${cellRed?CN.red:hNum>0?CN.border:CN.creamDark}`,borderRadius:"6px",padding:"6px 2px",fontSize:"13px",fontFamily:"'DM Sans',sans-serif",backgroundColor:cellRed?"#FFE0D8":hNum>0?CN.white:CN.creamDark,color:cellRed?CN.red:CN.dark,outline:"none",boxSizing:"border-box"}}/></td>
+                              <td key={d} style={{...TD,padding:"5px 4px"}}><input type="number" min={0} max={role.isMinor?Math.max(0,MINOR_WEEKLY_MAX-otherDaysTotal):24} step={0.5} value={h} placeholder="–" onChange={e=>updateDay(plan.id,d,e.target.value)} style={{width:"100%",textAlign:"center",border:`1.5px solid ${cellRed?CN.red:hNum>0?CN.border:CN.creamDark}`,borderRadius:"6px",padding:"6px 2px",fontSize:"13px",fontFamily:"'Barlow Semi Condensed',sans-serif",backgroundColor:cellRed?"#FFE0D8":hNum>0?CN.white:CN.creamDark,color:cellRed?CN.red:CN.dark,outline:"none",boxSizing:"border-box"}}/></td>
                             );})}
                             <td style={{...TD,textAlign:"center",fontWeight:600,padding:"8px",color:cost.otHrs>0?CN.amberDark:CN.dark}}>{cost.totalHrs>0?cost.totalHrs.toFixed(1)+"h":"—"}</td>
                             <td style={{...TD,textAlign:"center",fontWeight:cost.otHrs>0?700:400,padding:"8px",color:cost.otHrs>0?CN.amberDark:CN.mid}}>{cost.otHrs>0?cost.otHrs.toFixed(1)+"h ⚡":"—"}</td>
-                            <td style={{...TD,textAlign:"right",fontFamily:"'Barlow Condensed',sans-serif",fontSize:"15px",fontWeight:700,color:CN.orange,borderRight:"none",padding:"8px 14px"}}>{cost.total>0?fmt$(cost.total):"—"}</td>
+                            <td style={{...TD,textAlign:"right",fontFamily:"'Bowlby One SC',sans-serif",fontSize:"15px",fontWeight:700,color:CN.orange,borderRight:"none",padding:"8px 14px"}}>{cost.total>0?fmt$(cost.total):"—"}</td>
                           </tr>
                         );},),
                         <tr key={"add-"+role.id} style={{backgroundColor:CN.cream}}>
-                          <td colSpan={11} style={{padding:"3px 8px",borderTop:`1px solid ${CN.creamDark}`}}><button onClick={()=>{if(!readOnly)addRow(role.id);}} style={{border:"none",background:"none",cursor:"pointer",color:CN.orange,fontSize:"11px",fontWeight:700,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",letterSpacing:"0.06em",padding:"5px 8px",borderRadius:"6px"}}>+ Add {role.name}</button></td>
+                          <td colSpan={11} style={{padding:"3px 8px",borderTop:`1px solid ${CN.creamDark}`}}><button onClick={()=>{if(!readOnly)addRow(role.id);}} style={{border:"none",background:"none",cursor:"pointer",color:CN.orange,fontSize:"11px",fontWeight:700,fontFamily:"'Bowlby One SC',sans-serif",textTransform:"uppercase",letterSpacing:"0.06em",padding:"5px 8px",borderRadius:"6px"}}>+ Add {role.name}</button></td>
                         </tr>,
                       ];})}
                     </tbody>
@@ -857,9 +857,9 @@ function PlanTab({roleScenarios,planScenarios,setPlanScenarios,taxYears,ot,dirty
                   <tr style={{backgroundColor:CN.creamDark}}>
                     <td style={{...TD,padding:"10px 12px",fontWeight:700,fontSize:"11px",textTransform:"uppercase",color:CN.mid,borderTop:`2px solid ${CN.border}`,borderLeft:"none",borderBottom:"none"}}>Daily Totals</td>
                     {DAYS.map(d=><td key={d} style={{...TD,textAlign:"center",fontWeight:700,color:CN.dark,borderTop:`2px solid ${CN.border}`,padding:"10px 4px",borderBottom:"none"}}>{dayTotals[d]>0?dayTotals[d].toFixed(1)+"h":"—"}</td>)}
-                    <td style={{...TD,textAlign:"center",fontWeight:800,fontFamily:"'Barlow Condensed',sans-serif",fontSize:"14px",color:CN.orange,borderTop:`2px solid ${CN.border}`,padding:"10px 8px",borderBottom:"none"}}>{totals.totalHrs.toFixed(1)}h</td>
+                    <td style={{...TD,textAlign:"center",fontWeight:800,fontFamily:"'Bowlby One SC',sans-serif",fontSize:"14px",color:CN.orange,borderTop:`2px solid ${CN.border}`,padding:"10px 8px",borderBottom:"none"}}>{totals.totalHrs.toFixed(1)}h</td>
                     <td style={{...TD,textAlign:"center",fontWeight:700,color:totals.otHrs>0?CN.amberDark:CN.mid,borderTop:`2px solid ${CN.border}`,padding:"10px 8px",borderBottom:"none"}}>{totals.otHrs>0?totals.otHrs.toFixed(1)+"h ⚡":"—"}</td>
-                    <td style={{...TD,textAlign:"right",fontFamily:"'Barlow Condensed',sans-serif",fontSize:"16px",fontWeight:800,color:CN.orange,borderTop:`2px solid ${CN.border}`,borderRight:"none",borderBottom:"none",padding:"10px 14px"}}>{fmt$(totals.total)}</td>
+                    <td style={{...TD,textAlign:"right",fontFamily:"'Bowlby One SC',sans-serif",fontSize:"16px",fontWeight:800,color:CN.orange,borderTop:`2px solid ${CN.border}`,borderRight:"none",borderBottom:"none",padding:"10px 14px"}}>{fmt$(totals.total)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -932,7 +932,7 @@ function SummaryTab({roleScenarios,planScenarios,taxYears,ot,onRefresh}){
             <Btn variant="secondary" onClick={onRefresh}>↻ Refresh</Btn>
             <div style={{display:"flex",border:`1.5px solid ${CN.border}`,borderRadius:8,overflow:"hidden"}}>
               {[["single","Single"],["compare","Compare"]].map(([v,l])=>(
-                <button key={v} onClick={()=>setActiveView(v)} style={{padding:"7px 16px",border:"none",cursor:"pointer",fontSize:"12px",fontWeight:700,backgroundColor:activeView===v?CN.orange:CN.white,color:activeView===v?CN.white:CN.mid,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}>{l}</button>
+                <button key={v} onClick={()=>setActiveView(v)} style={{padding:"7px 16px",border:"none",cursor:"pointer",fontSize:"12px",fontWeight:700,backgroundColor:activeView===v?CN.orange:CN.white,color:activeView===v?CN.white:CN.mid,fontFamily:"'Barlow Semi Condensed',sans-serif",transition:"all 0.15s"}}>{l}</button>
               ))}
             </div>
           </div>
@@ -948,7 +948,7 @@ function SummaryTab({roleScenarios,planScenarios,taxYears,ot,onRefresh}){
             <div style={{background:`linear-gradient(135deg,${CN.dark} 0%,#2A2A26 100%)`,borderRadius:16,padding:"20px 24px",marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:16}}>
               <div>
                 <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:4}}>This Week · {fmtWeek(currentWeekStr)}</div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:40,fontWeight:800,color:CN.white,lineHeight:1}}>{fmt$(currentWeekData.totals.total)}</div>
+                <div style={{fontFamily:"'Bowlby One SC',sans-serif",fontSize:40,fontWeight:800,color:CN.white,lineHeight:1}}>{fmt$(currentWeekData.totals.total)}</div>
                 {weekDelta!==null&&(
                   <div style={{marginTop:6,fontSize:12,color:weekDelta>0?"#FF8A70":"#7DD3C8",fontWeight:600}}>
                     {weekDelta>0?"↑":"↓"} {fmt$(Math.abs(weekDelta))} vs prev week
@@ -992,7 +992,7 @@ function SummaryTab({roleScenarios,planScenarios,taxYears,ot,onRefresh}){
             ].map(([l,v,c])=>(
               <div key={l} style={{backgroundColor:CN.white,border:`1.5px solid ${CN.border}`,borderRadius:12,padding:"16px 18px"}}>
                 <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:CN.mid,marginBottom:6}}>{l}</div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:26,fontWeight:800,color:c}}>{v}</div>
+                <div style={{fontFamily:"'Bowlby One SC',sans-serif",fontSize:26,fontWeight:800,color:c}}>{v}</div>
               </div>
             ))}
           </div>
@@ -1049,7 +1049,7 @@ function SummaryTab({roleScenarios,planScenarios,taxYears,ot,onRefresh}){
                         <td style={{...TD,padding:"10px 8px",textAlign:"right"}}>{fmt$(w.totals.wages)}</td>
                         <td style={{...TD,padding:"10px 8px",textAlign:"right"}}>{fmt$(w.totals.taxes)}</td>
                         <td style={{...TD,padding:"10px 8px",textAlign:"right"}}>{fmt$(w.totals.benefits)}</td>
-                        <td style={{...TD,padding:"10px 8px",textAlign:"right",fontFamily:"'Barlow Condensed',sans-serif",fontSize:"15px",fontWeight:700,color:isCurrent?CN.orange:CN.dark,borderRight:"none"}}>{fmt$(w.totals.total)}</td>
+                        <td style={{...TD,padding:"10px 8px",textAlign:"right",fontFamily:"'Bowlby One SC',sans-serif",fontSize:"15px",fontWeight:700,color:isCurrent?CN.orange:CN.dark,borderRight:"none"}}>{fmt$(w.totals.total)}</td>
                       </tr>
                     );
                   })}
@@ -1063,7 +1063,7 @@ function SummaryTab({roleScenarios,planScenarios,taxYears,ot,onRefresh}){
                     <td style={{...TD,padding:"12px",textAlign:"right",fontWeight:700,borderTop:`2px solid ${CN.border}`,borderBottom:"none"}}>{fmt$(activeSData.grandTotal.wages)}</td>
                     <td style={{...TD,padding:"12px",textAlign:"right",fontWeight:700,borderTop:`2px solid ${CN.border}`,borderBottom:"none"}}>{fmt$(activeSData.grandTotal.taxes)}</td>
                     <td style={{...TD,padding:"12px",textAlign:"right",fontWeight:700,borderTop:`2px solid ${CN.border}`,borderBottom:"none"}}>{fmt$(activeSData.grandTotal.benefits)}</td>
-                    <td style={{...TD,padding:"12px",textAlign:"right",fontFamily:"'Barlow Condensed',sans-serif",fontSize:"18px",fontWeight:800,color:CN.orange,borderTop:`2px solid ${CN.border}`,borderRight:"none",borderBottom:"none"}}>{fmt$(activeSData.grandTotal.total)}</td>
+                    <td style={{...TD,padding:"12px",textAlign:"right",fontFamily:"'Bowlby One SC',sans-serif",fontSize:"18px",fontWeight:800,color:CN.orange,borderTop:`2px solid ${CN.border}`,borderRight:"none",borderBottom:"none"}}>{fmt$(activeSData.grandTotal.total)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -1081,7 +1081,7 @@ function SummaryTab({roleScenarios,planScenarios,taxYears,ot,onRefresh}){
             <div style={{fontSize:12,fontWeight:600,color:CN.mid,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.06em"}}>Select scenarios to compare (up to 5):</div>
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
               {allScenarioData.map(s=>{const sel=compareIds.includes(s.id);return(
-                <button key={s.id} onClick={()=>setCompareIds(prev=>sel?prev.filter(id=>id!==s.id):prev.length<5?[...prev,s.id]:prev)} style={{padding:"6px 14px",border:`1.5px solid ${sel?CN.orange:CN.border}`,borderRadius:"8px",backgroundColor:sel?CN.orangeLight:CN.white,color:sel?CN.orange:CN.dark,fontWeight:sel?700:400,fontSize:"12px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                <button key={s.id} onClick={()=>setCompareIds(prev=>sel?prev.filter(id=>id!==s.id):prev.length<5?[...prev,s.id]:prev)} style={{padding:"6px 14px",border:`1.5px solid ${sel?CN.orange:CN.border}`,borderRadius:"8px",backgroundColor:sel?CN.orangeLight:CN.white,color:sel?CN.orange:CN.dark,fontWeight:sel?700:400,fontSize:"12px",cursor:"pointer",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>
                   {sel?"✓ ":""}{s.name}
                 </button>
               );})}
@@ -1094,7 +1094,7 @@ function SummaryTab({roleScenarios,planScenarios,taxYears,ot,onRefresh}){
               <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":`repeat(${Math.min(compareData.length,3)},1fr)`,gap:10,marginBottom:16}}>
                 {compareData.map((s,i)=>{const colors=[CN.orange,CN.blue,CN.purple,CN.green,"#EC4899"];const c=colors[i%colors.length];return(
                   <div key={s.id} style={{backgroundColor:CN.white,border:`2px solid ${c}`,borderRadius:14,padding:16}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:c,textTransform:"uppercase",marginBottom:2}}>{s.name}</div>
+                    <div style={{fontFamily:"'Bowlby One SC',sans-serif",fontWeight:800,fontSize:16,color:c,textTransform:"uppercase",marginBottom:2}}>{s.name}</div>
                     <div style={{fontSize:11,color:CN.mid,marginBottom:12}}>Roles: {s.roleScenarioName}</div>
                     {[["Total Cost",fmt$(s.grandTotal.total)],["Total Hours",s.grandTotal.totalHrs.toFixed(1)+"h"],["OT Hours",s.grandTotal.otHrs.toFixed(1)+"h"],["Weeks",s.weeks.length+""]].map(([l,v])=>(
                       <div key={l} style={{display:"flex",justifyContent:"space-between",borderBottom:`1px solid ${CN.creamDark}`,padding:"6px 0",fontSize:13}}><span style={{color:CN.mid}}>{l}</span><span style={{fontWeight:700,color:CN.dark}}>{v}</span></div>
@@ -1149,7 +1149,7 @@ function TaxTab({taxYears,setTaxYears,selectedYear,setSelectedYear,ot,setOt,dirt
           <Sub style={{margin:0}}>Tax Year</Sub>
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             {displayYears.map(y=>(
-              <button key={y} onClick={()=>addYear(y)} style={{padding:"6px 18px",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer",border:`2px solid ${selectedYear===y?CN.orange:CN.border}`,backgroundColor:selectedYear===y?CN.orange:CN.white,color:selectedYear===y?CN.white:CN.dark,fontFamily:"'DM Sans',sans-serif"}}>
+              <button key={y} onClick={()=>addYear(y)} style={{padding:"6px 18px",borderRadius:8,fontWeight:700,fontSize:13,cursor:"pointer",border:`2px solid ${selectedYear===y?CN.orange:CN.border}`,backgroundColor:selectedYear===y?CN.orange:CN.white,color:selectedYear===y?CN.white:CN.dark,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>
                 {y}{taxYears?.[y]?.finalized&&<span style={{marginLeft:5,fontSize:10}}>✓</span>}
               </button>
             ))}
@@ -1464,10 +1464,10 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
   }
 
   const STEP_LABELS=["Week Setup","Volume Inputs","Assumptions","Results","Accept"];
-  const inputStyle={border:`1.5px solid ${CN.border}`,borderRadius:8,padding:"7px 10px",fontSize:13,fontFamily:"'DM Sans',sans-serif",color:CN.dark,backgroundColor:CN.white,outline:"none",width:"100%",boxSizing:"border-box"};
+  const inputStyle={border:`1.5px solid ${CN.border}`,borderRadius:8,padding:"7px 10px",fontSize:13,fontFamily:"'Barlow Semi Condensed',sans-serif",color:CN.dark,backgroundColor:CN.white,outline:"none",width:"100%",boxSizing:"border-box"};
   const sectionLabel={fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",color:CN.mid,marginBottom:8,display:"block"};
   const pillBtn=(active,onClick,label)=>(
-    <button onClick={onClick} style={{padding:"5px 13px",borderRadius:99,border:`1.5px solid ${active?CN.orange:CN.border}`,backgroundColor:active?CN.orangeLight:CN.white,color:active?CN.orange:CN.mid,fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:active?700:400,cursor:"pointer",transition:"all 0.15s"}}>{label}</button>
+    <button onClick={onClick} style={{padding:"5px 13px",borderRadius:99,border:`1.5px solid ${active?CN.orange:CN.border}`,backgroundColor:active?CN.orangeLight:CN.white,color:active?CN.orange:CN.mid,fontFamily:"'Barlow Semi Condensed',sans-serif",fontSize:12,fontWeight:active?700:400,cursor:"pointer",transition:"all 0.15s"}}>{label}</button>
   );
 
   const StepNav=()=>(
@@ -1476,7 +1476,7 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
         const step=i+1;const active=step===currentStep;const done=step<currentStep;const locked=step>=4&&!results;
         return(
           <div key={step} style={{display:"flex",alignItems:"center",flexShrink:0}}>
-            <button onClick={()=>!locked&&setCurrentStep(step)} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:99,backgroundColor:active?CN.orange:done?CN.creamDark:"transparent",border:`1.5px solid ${active?CN.orange:done?CN.border:CN.border}`,color:active?CN.white:locked?CN.border:CN.mid,cursor:locked?"not-allowed":"pointer",fontSize:12,fontWeight:active?700:400,fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap",transition:"all 0.2s"}}>
+            <button onClick={()=>!locked&&setCurrentStep(step)} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:99,backgroundColor:active?CN.orange:done?CN.creamDark:"transparent",border:`1.5px solid ${active?CN.orange:done?CN.border:CN.border}`,color:active?CN.white:locked?CN.border:CN.mid,cursor:locked?"not-allowed":"pointer",fontSize:12,fontWeight:active?700:400,fontFamily:"'Barlow Semi Condensed',sans-serif",whiteSpace:"nowrap",transition:"all 0.2s"}}>
               <span style={{width:18,height:18,borderRadius:"50%",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,backgroundColor:active?"rgba(255,255,255,0.25)":done?CN.orange:CN.border,color:active?CN.white:done?CN.white:CN.mid,flexShrink:0}}>{done&&step<currentStep?"✓":step}</span>
               {!isMobile&&label}
             </button>
@@ -1489,8 +1489,8 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
 
   const NavBar=({nextLabel,nextDisabled,onNext})=>(
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:28,paddingTop:20,borderTop:`1px solid ${CN.border}`}}>
-      <button onClick={()=>currentStep>1&&setCurrentStep(s=>s-1)} style={{padding:"9px 18px",borderRadius:10,border:`1.5px solid ${CN.border}`,backgroundColor:CN.white,color:currentStep===1?CN.border:CN.mid,cursor:currentStep===1?"not-allowed":"pointer",fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}} disabled={currentStep===1}>← Back</button>
-      {currentStep<TOTAL_STEPS&&<button onClick={onNext||(()=>setCurrentStep(s=>s+1))} disabled={nextDisabled} style={{padding:"9px 22px",borderRadius:10,border:"none",backgroundColor:nextDisabled?CN.border:CN.orange,color:CN.white,cursor:nextDisabled?"not-allowed":"pointer",fontSize:13,fontWeight:700,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",letterSpacing:"0.06em",transition:"all 0.15s"}}>{nextLabel||"Next →"}</button>}
+      <button onClick={()=>currentStep>1&&setCurrentStep(s=>s-1)} style={{padding:"9px 18px",borderRadius:10,border:`1.5px solid ${CN.border}`,backgroundColor:CN.white,color:currentStep===1?CN.border:CN.mid,cursor:currentStep===1?"not-allowed":"pointer",fontSize:13,fontWeight:600,fontFamily:"'Barlow Semi Condensed',sans-serif"}} disabled={currentStep===1}>← Back</button>
+      {currentStep<TOTAL_STEPS&&<button onClick={onNext||(()=>setCurrentStep(s=>s+1))} disabled={nextDisabled} style={{padding:"9px 22px",borderRadius:10,border:"none",backgroundColor:nextDisabled?CN.border:CN.orange,color:CN.white,cursor:nextDisabled?"not-allowed":"pointer",fontSize:13,fontWeight:700,fontFamily:"'Bowlby One SC',sans-serif",textTransform:"uppercase",letterSpacing:"0.06em",transition:"all 0.15s"}}>{nextLabel||"Next →"}</button>}
     </div>
   );
 
@@ -1501,7 +1501,7 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
         subtitle="Driver-based staffing plan — rule engine + Claude analysis"
         actions={
           (results||runError||currentStep>1)&&(
-            <button onClick={()=>{setCurrentStep(1);setResults(null);setClaudeNarrative("");setClaudeDistribution(null);setRunError("");setGaps([]);setAccepted(false);setAcceptedScenarios(null);setDayInputs(defaultDayInputs());setDistMode("claude");}} style={{padding:"7px 14px",borderRadius:8,border:`1.5px solid ${CN.border}`,backgroundColor:CN.white,color:CN.mid,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>↺ Reset</button>
+            <button onClick={()=>{setCurrentStep(1);setResults(null);setClaudeNarrative("");setClaudeDistribution(null);setRunError("");setGaps([]);setAccepted(false);setAcceptedScenarios(null);setDayInputs(defaultDayInputs());setDistMode("claude");}} style={{padding:"7px 14px",borderRadius:8,border:`1.5px solid ${CN.border}`,backgroundColor:CN.white,color:CN.mid,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>↺ Reset</button>
           )
         }
       />
@@ -1657,7 +1657,7 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
                       ].filter(Boolean).map(({label,value,color,large})=>(
                         <div key={label} style={{textAlign:"right"}}>
                           <div style={{fontSize:10,color:CN.mid,textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</div>
-                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:large?24:17,fontWeight:800,color}}>{value}</div>
+                          <div style={{fontFamily:"'Bowlby One SC',sans-serif",fontSize:large?24:17,fontWeight:800,color}}>{value}</div>
                         </div>
                       ))}
                     </div>
@@ -1688,7 +1688,7 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
             <div style={{display:"flex",justifyContent:"flex-end",padding:"14px 18px",background:`linear-gradient(135deg,${CN.dark} 0%,#2A2A26 100%)`,borderRadius:10,marginTop:8}}>
               <div style={{textAlign:"right"}}>
                 <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>Total Forecast Labor Cost</div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:CN.white}}>{fmt$(totalCost)}</div>
+                <div style={{fontFamily:"'Bowlby One SC',sans-serif",fontSize:28,fontWeight:800,color:CN.white}}>{fmt$(totalCost)}</div>
               </div>
             </div>
 
@@ -1714,7 +1714,7 @@ Distribute hours thoughtfully across operating days, weighting heavier days appr
           </div>
           <Note type="info">Creates new Role Scenario and Schedule Scenario labelled "Forecast — {fmtWeek(weekOf)}". You can rename them after.</Note>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:20,paddingTop:16,borderTop:`1px solid ${CN.border}`}}>
-            <button onClick={()=>setCurrentStep(4)} style={{padding:"9px 18px",borderRadius:10,border:`1.5px solid ${CN.border}`,backgroundColor:CN.white,color:CN.mid,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>← Back</button>
+            <button onClick={()=>setCurrentStep(4)} style={{padding:"9px 18px",borderRadius:10,border:`1.5px solid ${CN.border}`,backgroundColor:CN.white,color:CN.mid,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>← Back</button>
             <Btn onClick={acceptForecast}>✓ Accept &amp; Create Scenarios</Btn>
           </div>
         </Card>
@@ -1729,7 +1729,7 @@ const SIDEBAR_W=220;
 function Sidebar({tab,navGroups,currentUser,logoUrl,setLogoUrl,isAdmin,actingAsUser,setActingAsUser,tabSwitcher,isMobile,open,onClose,tabIcons,setTabIcons}){
   const sb={position:"fixed",top:0,left:0,bottom:0,width:SIDEBAR_W,backgroundColor:CN.sidebarBg,display:"flex",flexDirection:"column",zIndex:300,transition:"transform 0.25s ease",transform:isMobile?(open?"translateX(0)":"translateX(-100%)"):"translateX(0)",boxShadow:isMobile&&open?"4px 0 24px rgba(0,0,0,0.4)":undefined,overflowY:"auto"};
 
-  const sidebarBtnBase={display:"flex",alignItems:"center",gap:10,width:"100%",padding:"9px 16px",border:"none",background:"transparent",color:CN.sidebarText,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif",textAlign:"left",outline:"none",transition:"background 0.1s"};
+  const sidebarBtnBase={display:"flex",alignItems:"center",gap:10,width:"100%",padding:"9px 16px",border:"none",background:"transparent",color:CN.sidebarText,cursor:"pointer",fontSize:12,fontFamily:"'Barlow Semi Condensed',sans-serif",textAlign:"left",outline:"none",transition:"background 0.1s"};
 
   return(
     <>
@@ -1743,7 +1743,7 @@ function Sidebar({tab,navGroups,currentUser,logoUrl,setLogoUrl,isAdmin,actingAsU
             </div>
             <input id="cn-logo-upload" type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>setLogoUrl(ev.target.result);reader.readAsDataURL(file);e.target.value="";}}/>
             <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.9)",lineHeight:1.1}}>Cheeky Noodles</div>
+              <div style={{fontFamily:"'Bowlby One SC',sans-serif",fontWeight:800,fontSize:15,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.9)",lineHeight:1.1}}>Cheeky Noodles</div>
               <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:1}}>Headcount Planner</div>
             </div>
           </div>
@@ -1796,7 +1796,7 @@ function Sidebar({tab,navGroups,currentUser,logoUrl,setLogoUrl,isAdmin,actingAsU
                   width:300,backgroundColor:CN.white,borderRadius:12,
                   boxShadow:"0 8px 32px rgba(0,0,0,0.2)",border:`1px solid ${CN.border}`,
                   overflow:"hidden",outline:"none",zIndex:500,
-                  fontFamily:"'DM Sans',sans-serif",
+                  fontFamily:"'Barlow Semi Condensed',sans-serif",
                 }}
               >
                 <div style={{padding:"11px 16px",backgroundColor:CN.creamDark,borderBottom:`1px solid ${CN.border}`,fontWeight:700,fontSize:13,color:CN.dark}}>⚙️ System Tools</div>
@@ -1809,11 +1809,11 @@ function Sidebar({tab,navGroups,currentUser,logoUrl,setLogoUrl,isAdmin,actingAsU
                       {logoUrl?<img src={logoUrl} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}}/>:<span style={{fontSize:20,opacity:0.4}}>🏢</span>}
                     </div>
                     <div style={{flex:1}}>
-                      <button onClick={()=>document.getElementById("cn-logo-upload").click()} style={{fontSize:12,padding:"5px 10px",borderRadius:6,border:`1px solid ${CN.border}`,backgroundColor:CN.white,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",color:CN.dark,display:"block",width:"100%",marginBottom:4}}>
+                      <button onClick={()=>document.getElementById("cn-logo-upload").click()} style={{fontSize:12,padding:"5px 10px",borderRadius:6,border:`1px solid ${CN.border}`,backgroundColor:CN.white,cursor:"pointer",fontFamily:"'Barlow Semi Condensed',sans-serif",color:CN.dark,display:"block",width:"100%",marginBottom:4}}>
                         {logoUrl?"Replace logo":"Upload logo"}
                       </button>
                       {logoUrl&&(
-                        <button onClick={()=>setLogoUrl(null)} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:`1px solid ${CN.border}`,backgroundColor:CN.white,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",color:CN.red,display:"block",width:"100%"}}>Remove logo</button>
+                        <button onClick={()=>setLogoUrl(null)} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:`1px solid ${CN.border}`,backgroundColor:CN.white,cursor:"pointer",fontFamily:"'Barlow Semi Condensed',sans-serif",color:CN.red,display:"block",width:"100%"}}>Remove logo</button>
                       )}
                     </div>
                   </div>
@@ -1869,7 +1869,7 @@ function Sidebar({tab,navGroups,currentUser,logoUrl,setLogoUrl,isAdmin,actingAsU
                     border:`1px solid ${CN.border}`,borderRadius:10,
                     boxShadow:"0 8px 24px rgba(0,0,0,0.15)",
                     overflow:"hidden",outline:"none",zIndex:500,
-                    fontFamily:"'DM Sans',sans-serif",
+                    fontFamily:"'Barlow Semi Condensed',sans-serif",
                   }}
                 >
                   <div style={{padding:"10px 12px",borderBottom:`1px solid ${CN.border}`,backgroundColor:CN.creamDark}}>
@@ -1879,7 +1879,7 @@ function Sidebar({tab,navGroups,currentUser,logoUrl,setLogoUrl,isAdmin,actingAsU
                   <DropdownMenu.Item asChild>
                     <button
                       onClick={()=>window.Clerk?.signOut()}
-                      style={{display:"block",width:"100%",padding:"10px 12px",background:"none",border:"none",textAlign:"left",fontSize:13,fontWeight:600,color:CN.red,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",outline:"none"}}
+                      style={{display:"block",width:"100%",padding:"10px 12px",background:"none",border:"none",textAlign:"left",fontSize:13,fontWeight:600,color:CN.red,cursor:"pointer",fontFamily:"'Barlow Semi Condensed',sans-serif",outline:"none"}}
                       onMouseEnter={e=>e.currentTarget.style.background="#FEE2E2"}
                       onMouseLeave={e=>e.currentTarget.style.background="none"}
                     >
@@ -1905,7 +1905,7 @@ function MobileTopBar({onMenuOpen,tab,navGroups}){
     <div style={{position:"fixed",top:0,left:0,right:0,height:52,backgroundColor:CN.dark,display:"flex",alignItems:"center",gap:12,padding:"0 16px",zIndex:200,boxShadow:"0 2px 12px rgba(0,0,0,0.3)"}}>
       <button onClick={onMenuOpen} style={{border:"none",background:"rgba(255,255,255,0.1)",borderRadius:8,padding:"6px 10px",cursor:"pointer",color:"rgba(255,255,255,0.9)",fontSize:16,lineHeight:1}}>☰</button>
       <div style={{flex:1}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,letterSpacing:"0.08em",textTransform:"uppercase",color:CN.white}}>{activeItem?.icon} {activeItem?.label||"Cheeky Noodles"}</div>
+        <div style={{fontFamily:"'Bowlby One SC',sans-serif",fontWeight:800,fontSize:16,letterSpacing:"0.08em",textTransform:"uppercase",color:CN.white}}>{activeItem?.icon} {activeItem?.label||"Cheeky Noodles"}</div>
       </div>
     </div>
   );
@@ -1941,7 +1941,7 @@ export default function App({currentUser}){
   const[saving,setSaving]=useState({roles:false,plans:false,settings:false});
 
   useEffect(()=>{
-    const link=document.createElement("link");link.rel="stylesheet";link.href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap";document.head.appendChild(link);
+    const link=document.createElement("link");link.rel="stylesheet";link.href="https://fonts.googleapis.com/css2?family=Bowlby+One+SC&family=Barlow+Semi+Condensed:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap";document.head.appendChild(link);
     document.body.style.margin="0";document.body.style.padding="0";document.body.style.backgroundColor=CN.cream;
     return()=>{};
   },[]);
@@ -2067,7 +2067,7 @@ export default function App({currentUser}){
         {noAdminsYet&&(
           <div style={{backgroundColor:CN.amberLight,borderBottom:`1px solid ${CN.amber}`,padding:"10px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
             <span style={{fontSize:13,color:"#92400E",fontWeight:500}}>⚠️ No admin set up yet.</span>
-            <button onClick={claimAdmin} style={{padding:"6px 16px",backgroundColor:CN.amber,color:CN.white,border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",letterSpacing:"0.06em"}}>Claim Admin Access</button>
+            <button onClick={claimAdmin} style={{padding:"6px 16px",backgroundColor:CN.amber,color:CN.white,border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"'Bowlby One SC',sans-serif",textTransform:"uppercase",letterSpacing:"0.06em"}}>Claim Admin Access</button>
           </div>
         )}
 
