@@ -18,11 +18,51 @@ function useIsMobile() {
 }
 
 // ── Storage shim ──────────────────────────────────────────────────
+// ── Storage: backed by D1 via Worker ─────────────────────────────
+// Falls back to localStorage if token unavailable (dev / pre-auth).
+const STORAGE_WORKER = "https://cheeky-headcount-proxy.vaughan-184.workers.dev";
+
+async function storageFetch(action, body) {
+  try {
+    const token = await window._clerkGetToken?.();
+    if (!token) throw new Error("no token");
+    const res = await fetch(`${STORAGE_WORKER}/storage/${action}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`storage ${action} failed: ${res.status}`);
+    return await res.json();
+  } catch (e) {
+    // Fallback to localStorage so dev/offline still works
+    if (action === "get") {
+      const v = localStorage.getItem(body.key);
+      return v ? { value: v } : { value: null };
+    }
+    if (action === "set") {
+      localStorage.setItem(body.key, body.value);
+      return { key: body.key, value: body.value, updated_at: new Date().toISOString() };
+    }
+    if (action === "checkandset") {
+      localStorage.setItem(body.key, body.value);
+      return { ok: true, updated_at: new Date().toISOString() };
+    }
+    return null;
+  }
+}
+
 if (!window.storage) {
   window.storage = {
-    get: async (key) => { const v = localStorage.getItem(key); return v ? { value: v } : null; },
-    set: async (key, value) => { localStorage.setItem(key, value); return { key, value }; },
-    checkAndSet: async (key, value) => { localStorage.setItem(key, value); return { ok: true }; },
+    get: async (key) => {
+      const r = await storageFetch("get", { key });
+      return r?.value ? { value: r.value, updated_at: r.updated_at } : null;
+    },
+    set: async (key, value) => {
+      return await storageFetch("set", { key, value });
+    },
+    checkAndSet: async (key, value, last_updated_at) => {
+      return await storageFetch("checkandset", { key, value, last_updated_at });
+    },
   };
 }
 
