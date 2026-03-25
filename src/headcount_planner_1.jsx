@@ -4,6 +4,7 @@ import * as Popover from "@radix-ui/react-popover";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { ForecastSetupTab, DEFAULT_FORECAST_SETUP } from "./forecast_setup.jsx";
 
 // ── Mobile detection ──────────────────────────────────────────────
 function useIsMobile() {
@@ -83,6 +84,7 @@ const SHARED_SK = {
   icons: "cn-hc-tab-icons-v1",
   userRegistry: "cn-hc-user-registry-v1",
   admins: "cn-hc-admins-v1",
+  forecastSetup: "cn-forecast-setup-v1",
 };
 
 function uid() { return Math.random().toString(36).slice(2,9) + Date.now().toString(36); }
@@ -1927,6 +1929,8 @@ export default function App({currentUser}){
   const[savedPS,setSavedPS]=useState(null);
   const[savedTaxYears,setSavedTaxYears]=useState(null);
   const[savedOt,setSavedOt]=useState(null);
+  const[forecastSetup,setForecastSetup]=useState(null);
+  const[savedForecastSetup,setSavedForecastSetup]=useState(null);
   const[selectedTaxYear,setSelectedTaxYear]=useState(new Date().getFullYear());
   const[admins,setAdmins]=useState([]);
   const[allUsers,setAllUsers]=useState([]);
@@ -1938,7 +1942,7 @@ export default function App({currentUser}){
   const[loading,setLoading]=useState(true);
   const[logoUrl,setLogoUrl]=useState(null);
   const[tabIcons,setTabIcons]=useState(DEFAULT_TAB_ICONS);
-  const[saving,setSaving]=useState({roles:false,plans:false,settings:false});
+  const[saving,setSaving]=useState({roles:false,plans:false,settings:false,forecastSetup:false});
 
   useEffect(()=>{
     const link=document.createElement("link");link.rel="stylesheet";link.href="https://fonts.googleapis.com/css2?family=Bowlby+One+SC&family=Barlow+Semi+Condensed:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap";document.head.appendChild(link);
@@ -1983,6 +1987,9 @@ export default function App({currentUser}){
     setOt(o);setSavedOt(deepClone(o));lastKnownAt.current[SHARED_SK.ot]=oData.updated_at;
     const si=await loadS(SHARED_SK.icons,DEFAULT_TAB_ICONS);setTabIcons({...DEFAULT_TAB_ICONS,...si});
     const sl=await loadS(SHARED_SK.logo,null);if(sl)setLogoUrl(sl);
+    const fsData=await loadSWithTs(SHARED_SK.forecastSetup,null);
+    const fs=fsData.value||DEFAULT_FORECAST_SETUP;
+    setForecastSetup(fs);setSavedForecastSetup(deepClone(fs));lastKnownAt.current[SHARED_SK.forecastSetup]=fsData.updated_at;
     if(showLoader)setLoading(false);
   },[SK,migrate,registerUser]);
 
@@ -2004,9 +2011,11 @@ export default function App({currentUser}){
   const saveRoles=()=>doSave("roles",[{key:SK.roleScenarios,val:roleScenarios,setSaved:setSavedRS}]);
   const savePlans=()=>doSave("plans",[{key:SK.planScenarios,val:planScenarios,setSaved:setSavedPS}]);
   const saveSettings=()=>doSave("settings",[{key:SHARED_SK.taxYears,val:taxYears,setSaved:setSavedTaxYears},{key:SHARED_SK.ot,val:ot,setSaved:setSavedOt}]);
+  const saveForecastSetup=()=>doSave("forecastSetup",[{key:SHARED_SK.forecastSetup,val:forecastSetup,setSaved:setSavedForecastSetup}]);
   const clearRoles=()=>setRoleScenarios(deepClone(savedRS));
   const clearPlansWeek=(weekOf)=>setPlanScenarios(prev=>({...prev,scenarios:prev.scenarios.map(s=>s.id===prev.activeId?{...s,plans:[...s.plans.filter(p=>p.weekOf!==weekOf),...(savedPS.scenarios.find(ss=>ss.id===prev.activeId)?.plans.filter(p=>p.weekOf===weekOf)||[])]}:s)}));
   const clearSettings=()=>{setTaxYears(deepClone(savedTaxYears));setOt(deepClone(savedOt));};
+  const clearForecastSetup=()=>setForecastSetup(deepClone(savedForecastSetup));
   const claimAdmin=async()=>{const updated=[currentUser.id];await saveS(SHARED_SK.admins,updated);setAdmins(updated);};
   const promoteUser=async(userId)=>{const updated=[...admins,userId];await saveS(SHARED_SK.admins,updated);setAdmins(updated);};
   const demoteUser=async(userId)=>{const updated=admins.filter(id=>id!==userId);await saveS(SHARED_SK.admins,updated);setAdmins(updated);};
@@ -2014,10 +2023,14 @@ export default function App({currentUser}){
   const rolesDirty=!!savedRS&&JSON.stringify(roleScenarios)!==JSON.stringify(savedRS);
   const plansDirty=!!savedPS&&JSON.stringify(planScenarios)!==JSON.stringify(savedPS);
   const settingsDirty=!!savedTaxYears&&(JSON.stringify(taxYears)!==JSON.stringify(savedTaxYears)||JSON.stringify(ot)!==JSON.stringify(savedOt));
+  const forecastSetupDirty=!!savedForecastSetup&&JSON.stringify(forecastSetup)!==JSON.stringify(savedForecastSetup);
 
   const navGroups=[
+    {label:"FP&A",items:[
+      {id:"forecast-setup",label:"Forecast Setup",icon:"📐",dirty:forecastSetupDirty},
+    ]},
     {label:"Operations",items:[
-      {id:"forecast",label:"Forecaster",icon:"🔮"},
+      {id:"forecast",label:"Headcount Forecaster",icon:"🔮"},
       {id:"plan",label:"Schedule",icon:tabIcons.plan,dirty:plansDirty},
     ]},
     {label:"Insights",items:[
@@ -2041,9 +2054,11 @@ export default function App({currentUser}){
   const contentStyle={
     marginLeft:isMobile?0:SIDEBAR_W,
     minHeight:"100vh",
+    width:isMobile?"100%":`calc(100% - ${SIDEBAR_W}px)`,
     backgroundColor:CN.cream,
     transition:"margin-left 0.25s ease",
     paddingTop:isMobile?52:0,
+    boxSizing:"border-box",
   };
 
   const innerPad={maxWidth:1100,margin:"0 auto",padding:isMobile?"16px 12px":"32px 32px"};
@@ -2072,6 +2087,7 @@ export default function App({currentUser}){
         )}
 
         <div style={innerPad}>
+          {tab==="forecast-setup"&&forecastSetup&&<ForecastSetupTab setup={forecastSetup} setSetup={setForecastSetup} savedSetup={savedForecastSetup} onSave={saveForecastSetup} onClear={clearForecastSetup} saving={saving.forecastSetup} isMobile={isMobile}/>}
           {tab==="roles"&&roleScenarios&&<RolesTab roleScenarios={roleScenarios} setRoleScenarios={setRoleScenarios} taxYears={taxYears} ot={ot} isAdmin={effectiveAdmin} dirty={rolesDirty} onSave={saveRoles} onClear={clearRoles} saving={saving.roles} isMobile={isMobile}/>}
           {tab==="plan"&&planScenarios&&roleScenarios&&<PlanTab roleScenarios={roleScenarios} planScenarios={planScenarios} setPlanScenarios={setPlanScenarios} taxYears={taxYears} ot={ot} isAdmin={effectiveAdmin} dirty={plansDirty} onSave={savePlans} onClear={clearPlansWeek} saving={saving.plans} isMobile={isMobile}/>}
           {tab==="summary"&&<SummaryTab roleScenarios={roleScenarios||{scenarios:[]}} planScenarios={planScenarios||{scenarios:[]}} taxYears={taxYears} ot={ot} onRefresh={()=>loadAll(false)}/>}
