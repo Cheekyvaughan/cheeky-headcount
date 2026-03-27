@@ -10,7 +10,7 @@ export function AuthGate({ children }) {
   if (!isLoaded) {
     return (
       <div style={{ background: '#FAF4E4', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ fontFamily: 'DM Sans, sans-serif', color: '#7A6A58', fontSize: 16 }}>Loading…</div>
+        <div style={{ fontFamily: "'Barlow Semi Condensed', sans-serif", color: '#7A6A58', fontSize: 16 }}>Loading…</div>
       </div>
     )
   }
@@ -29,10 +29,10 @@ export function AuthGate({ children }) {
         padding: 24,
       }}>
         <div style={{ textAlign: 'center', marginBottom: 8 }}>
-          <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 32, fontWeight: 700, color: '#1C1208', letterSpacing: '-0.5px' }}>
+          <div style={{ fontFamily: "'Bowlby One SC', sans-serif", fontSize: 32, fontWeight: 700, color: '#1C1208', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Cheeky Noodles
           </div>
-          <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 14, color: '#7A6A58', marginTop: 4 }}>
+          <div style={{ fontFamily: "'Barlow Semi Condensed', sans-serif", fontSize: 14, color: '#7A6A58', marginTop: 4 }}>
             Cheeky Forecaster — sign in with your @cheekynoodles.com account
           </div>
         </div>
@@ -42,12 +42,12 @@ export function AuthGate({ children }) {
             variables: {
               colorPrimary: '#F43A0A',
               colorBackground: '#FFFFFF',
-              fontFamily: 'DM Sans, sans-serif',
+              fontFamily: "'Barlow Semi Condensed', sans-serif",
               borderRadius: '8px',
             },
             elements: {
               card: { boxShadow: '0 2px 16px rgba(0,0,0,0.08)', border: '1px solid #E0D4BC' },
-              headerTitle: { fontFamily: 'Barlow Condensed, sans-serif', fontSize: 22 },
+              headerTitle: { fontFamily: "'Barlow Semi Condensed', sans-serif", fontSize: 22 },
             }
           }}
         />
@@ -70,7 +70,7 @@ export function AuthGate({ children }) {
         justifyContent: 'center',
         gap: 16,
         padding: 24,
-        fontFamily: 'DM Sans, sans-serif',
+        fontFamily: "'Barlow Semi Condensed', sans-serif",
       }}>
         <div style={{ fontSize: 32 }}>🚫</div>
         <div style={{ fontSize: 18, fontWeight: 600, color: '#1C1208' }}>Access restricted</div>
@@ -86,7 +86,7 @@ export function AuthGate({ children }) {
             color: '#fff',
             border: 'none',
             borderRadius: 8,
-            fontFamily: 'DM Sans, sans-serif',
+            fontFamily: "'Barlow Semi Condensed', sans-serif",
             fontSize: 14,
             fontWeight: 600,
             cursor: 'pointer',
