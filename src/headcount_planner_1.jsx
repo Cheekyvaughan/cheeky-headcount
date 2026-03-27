@@ -1295,6 +1295,85 @@ function AdminTab({currentUser,allUsers,admins,onPromote,onDemote,onRefresh,isMo
     setPeriodSaved(true);
     setTimeout(()=>setPeriodSaved(false), 2000);
   };
+
+  // ── D1 Diagnostics ──────────────────────────────────────────────
+  const D1_KEYS = [
+    "cn-hc-admins-v1",
+    "cn-hc-user-registry-v1",
+    "cn-stores-v1",
+    "cn-periods-v1",
+    "cn-hc-tax-years-v1",
+    "cn-hc-ot-v4",
+    "cn-hc-tab-icons-v1",
+  ];
+  const [d1Results, setD1Results] = useState(null);
+  const [d1Loading, setD1Loading] = useState(false);
+  const [writeTest, setWriteTest] = useState(null);
+  const [writeLoading, setWriteLoading] = useState(false);
+
+  const runDiagnostics = async () => {
+    setD1Loading(true);
+    setD1Results(null);
+    const results = [];
+    for (const key of D1_KEYS) {
+      try {
+        const r = await window.storage.get(key);
+        if (!r || r.value === null || r.value === undefined) {
+          results.push({ key, status: "empty", size: 0, updated_at: null });
+        } else {
+          let parsed;
+          try { parsed = JSON.parse(r.value); } catch { parsed = null; }
+          const size = r.value.length;
+          const preview = typeof parsed === "object" && parsed !== null
+            ? (Array.isArray(parsed) ? `Array(${parsed.length})` : `Object(${Object.keys(parsed).length} keys)`)
+            : String(parsed).slice(0, 40);
+          results.push({ key, status: "found", size, updated_at: r.updated_at, preview });
+        }
+      } catch (e) {
+        results.push({ key, status: "error", error: e.message });
+      }
+    }
+    // Also check for any store config keys
+    const storesRaw = await window.storage.get("cn-stores-v1");
+    if (storesRaw?.value) {
+      try {
+        const stores = JSON.parse(storesRaw.value);
+        if (Array.isArray(stores)) {
+          for (const s of stores) {
+            const cfgKey = `cn-store-config-${s.id}-v1`;
+            const cfgR = await window.storage.get(cfgKey);
+            if (!cfgR || cfgR.value === null) {
+              results.push({ key: cfgKey, status: "empty", size: 0, updated_at: null });
+            } else {
+              results.push({ key: cfgKey, status: "found", size: cfgR.value.length, updated_at: cfgR.updated_at, preview: `Store config for "${s.name}"` });
+            }
+          }
+        }
+      } catch {}
+    }
+    setD1Results(results);
+    setD1Loading(false);
+  };
+
+  const runWriteTest = async () => {
+    setWriteLoading(true);
+    setWriteTest(null);
+    const testKey = `cn-diag-test-${Date.now()}`;
+    const testVal = { test: true, ts: new Date().toISOString(), user: currentUser.id };
+    try {
+      await window.storage.set(testKey, JSON.stringify(testVal));
+      const r = await window.storage.get(testKey);
+      if (r?.value) {
+        const back = JSON.parse(r.value);
+        setWriteTest({ ok: true, msg: `Write + read-back succeeded. Key: ${testKey}`, back });
+      } else {
+        setWriteTest({ ok: false, msg: "Write appeared to succeed but read-back returned null." });
+      }
+    } catch (e) {
+      setWriteTest({ ok: false, msg: e.message });
+    }
+    setWriteLoading(false);
+  };
   const[expanded,setExpanded]=useState(null);
   const[userScenarios,setUserScenarios]=useState({});
   const[loadingUser,setLoadingUser]=useState(null);
@@ -1390,6 +1469,71 @@ function AdminTab({currentUser,allUsers,admins,onPromote,onDemote,onRefresh,isMo
           </div>
         </div>
       </Card>
+
+      {/* ── D1 Storage Diagnostics ── */}
+      <Card style={{marginBottom:20,border:`1.5px solid ${CN.blue}`,backgroundColor:CN.blueLight}}>
+        <div style={{fontFamily:"'Bowlby One SC',sans-serif",fontSize:14,textTransform:"uppercase",letterSpacing:"0.06em",color:CN.blue,marginBottom:6}}>🗄️ D1 Storage Diagnostics</div>
+        <div style={{fontSize:13,color:CN.mid,fontFamily:"'Barlow Semi Condensed',sans-serif",marginBottom:14}}>
+          Check what is actually stored in D1 and verify the write path is working.
+        </div>
+        <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+          <button onClick={runDiagnostics} disabled={d1Loading} style={{
+            padding:"8px 18px",borderRadius:8,border:"none",cursor:d1Loading?"not-allowed":"pointer",
+            backgroundColor:CN.blue,color:CN.white,fontFamily:"'Bowlby One SC',sans-serif",
+            fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",opacity:d1Loading?0.6:1,
+          }}>{d1Loading?"Checking…":"Check D1 Keys"}</button>
+          <button onClick={runWriteTest} disabled={writeLoading} style={{
+            padding:"8px 18px",borderRadius:8,border:`1.5px solid ${CN.blue}`,cursor:writeLoading?"not-allowed":"pointer",
+            backgroundColor:CN.white,color:CN.blue,fontFamily:"'Bowlby One SC',sans-serif",
+            fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",opacity:writeLoading?0.6:1,
+          }}>{writeLoading?"Testing…":"Test Write → Read"}</button>
+        </div>
+
+        {/* Write test result */}
+        {writeTest&&(
+          <div style={{
+            padding:"10px 14px",borderRadius:8,marginBottom:12,
+            backgroundColor:writeTest.ok?"#D0EFE8":"#FFE0D8",
+            border:`1px solid ${writeTest.ok?CN.green:CN.red}`,
+            fontSize:13,color:writeTest.ok?CN.green:CN.red,
+            fontFamily:"'Barlow Semi Condensed',sans-serif",lineHeight:1.5,
+          }}>
+            {writeTest.ok?"✓ ":"✗ "}{writeTest.msg}
+          </div>
+        )}
+
+        {/* Key scan results */}
+        {d1Results&&(
+          <div style={{borderRadius:10,overflow:"hidden",border:`1px solid ${CN.border}`}}>
+            <div style={{display:"grid",gridTemplateColumns:"2fr 80px 100px 1fr",gap:0,backgroundColor:CN.dark,padding:"7px 12px"}}>
+              {["Key","Status","Size","Last Updated"].map(h=>(
+                <div key={h} style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",color:"rgba(255,255,255,0.6)",fontFamily:"'Barlow Semi Condensed',sans-serif"}}>{h}</div>
+              ))}
+            </div>
+            {d1Results.map((r,i)=>(
+              <div key={i} style={{
+                display:"grid",gridTemplateColumns:"2fr 80px 100px 1fr",gap:0,
+                padding:"8px 12px",
+                backgroundColor:i%2===0?CN.white:"#FAFAF8",
+                borderTop:i===0?"none":`1px solid ${CN.border}`,
+              }}>
+                <div style={{fontSize:12,fontFamily:"monospace",color:CN.dark,wordBreak:"break-all"}}>{r.key}</div>
+                <div style={{fontSize:12,fontWeight:700,color:r.status==="found"?CN.green:r.status==="error"?CN.red:CN.amber,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>
+                  {r.status==="found"?"✓ Found":r.status==="empty"?"— Empty":"✗ Error"}
+                </div>
+                <div style={{fontSize:12,color:CN.mid,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>
+                  {r.size?`${(r.size/1024).toFixed(1)} KB`:"-"}
+                </div>
+                <div style={{fontSize:11,color:CN.mid,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>
+                  {r.status==="found"?(r.updated_at?new Date(r.updated_at).toLocaleString():(r.preview||""))
+                   :r.status==="error"?r.error:"Not written to D1"}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
       {allUsers.length===0&&<Note>No users have signed in yet.</Note>}
       {allUsers.map(u=>{
         const isExpanded=expanded===u.id;const uScenarios=userScenarios[u.id];const loading=loadingUser===u.id;const uIsAdmin=isAdminFn(u.id);const uIsSelf=isSelf(u.id);
@@ -1870,7 +2014,7 @@ function Sidebar({tab,navGroups,currentUser,logoUrl,setLogoUrl,isAdmin,actingAsU
             <input id="cn-logo-upload" type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>setLogoUrl(ev.target.result);reader.readAsDataURL(file);e.target.value="";}}/>
             <div>
               <div style={{fontFamily:"'Bowlby One SC',sans-serif",fontWeight:800,fontSize:15,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.9)",lineHeight:1.1}}>Cheeky Noodles</div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:1}}>Cheeky Forecaster</div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:1}}>Headcount Planner</div>
             </div>
           </div>
         </div>
