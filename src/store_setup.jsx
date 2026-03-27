@@ -1027,8 +1027,24 @@ export function StoreSetupTab({stores,setStores,activeStoreId,setActiveStoreId,p
   const updateActive=useCallback(fn=>setStores(prev=>prev.map(s=>s.id===activeStoreId?(typeof fn==="function"?fn(s):fn):s)),[activeStoreId,setStores]);
   const addStore=()=>{const f={...deepClone(DEFAULT_STORE),id:uid(),name:""};setWizardStore(f);setIsNew(true);setShowWizard(true);};
   const deleteStore=(id)=>setStores(prev=>{const r=prev.filter(s=>s.id!==id);if(activeStoreId===id&&r.length>0)setActiveStoreId(r[0].id);return r;});
-  const completeWizard=()=>{if(!wizardStore)return;const c={...wizardStore,setupComplete:true};if(isNew){setStores(p=>[...p,c]);setActiveStoreId(c.id);}else setStores(p=>p.map(s=>s.id===c.id?c:s));setShowWizard(false);setWizardStore(null);setIsNew(false);setTimeout(()=>onSave?.(),100);};
-  const exitWizard=()=>{if(!wizardStore){setShowWizard(false);return;}if(isNew){setStores(p=>[...p,{...wizardStore,setupComplete:false}]);setActiveStoreId(wizardStore.id);}else setStores(p=>p.map(s=>s.id===wizardStore.id?{...wizardStore,setupComplete:false}:s));setShowWizard(false);setWizardStore(null);setTimeout(()=>onSave?.(),100);};
+  const completeWizard=()=>{
+    if(!wizardStore)return;
+    const c={...wizardStore,setupComplete:true};
+    const finalStores=isNew?[...stores,c]:stores.map(s=>s.id===c.id?c:s);
+    setStores(finalStores);
+    setActiveStoreId(c.id);
+    setShowWizard(false);setWizardStore(null);setIsNew(false);
+    onSave?.(finalStores);
+  };
+  const exitWizard=()=>{
+    if(!wizardStore){setShowWizard(false);return;}
+    const c={...wizardStore,setupComplete:false};
+    const finalStores=isNew?[...stores,c]:stores.map(s=>s.id===wizardStore.id?c:s);
+    setStores(finalStores);
+    if(isNew)setActiveStoreId(wizardStore.id);
+    setShowWizard(false);setWizardStore(null);
+    onSave?.(finalStores);
+  };
   const discardWizard=()=>{setShowWizard(false);setWizardStore(null);setIsNew(false);};
 
   const dirty=JSON.stringify(stores)!==JSON.stringify(savedStores);
@@ -1077,9 +1093,9 @@ export function StoreSetupTab({stores,setStores,activeStoreId,setActiveStoreId,p
           </div>
         </SectionCard>
         <SectionCard num={4} title="Seasonality Multipliers" subtitle="Volume adjustments by season, calibrated with AI" complete={sections[3].complete} locked={sections[3].locked}><SecSeasonality store={active} onChange={updateActive}/></SectionCard>
-        <SectionCard num={5} title="Acquisition Profiles" subtitle="Opening transaction volumes by scenario" complete={sections[4].complete} locked={sections[4].locked}><SecAcquisition store={active} onChange={updateActive}/></SectionCard>
-        <SectionCard num={6} title="Growth Profiles" subtitle="Month-on-month transaction growth assumptions" complete={sections[5].complete} locked={sections[5].locked}><SecGrowth store={active} onChange={updateActive}/></SectionCard>
-        <SectionCard num={7} title="Scenario Matrix" subtitle="Activation and base scenario for forecasting" complete={sections[6].complete} locked={sections[6].locked}><SecScenarios store={active} onChange={updateActive}/></SectionCard>
+        <SectionCard num={5} title="Scenario Matrix" subtitle="Activation and base scenario for forecasting" complete={sections[4].complete} locked={sections[4].locked}><SecScenarios store={active} onChange={updateActive}/></SectionCard>
+        <SectionCard num={6} title="Acquisition Profiles" subtitle="Opening transaction volumes by scenario" complete={sections[5].complete} locked={sections[5].locked}><SecAcquisition store={active} onChange={updateActive}/></SectionCard>
+        <SectionCard num={7} title="Growth Profiles" subtitle="Month-on-month transaction growth assumptions" complete={sections[6].complete} locked={sections[6].locked}><SecGrowth store={active} onChange={updateActive}/></SectionCard>
         {SECTIONS.every(s=>isSectionComplete(active,s))&&<InfoBox type="success">✓ All sections complete. <strong>{active.name}</strong> is ready for revenue forecasting.</InfoBox>}
       </>)}
       {/* Save bar */}

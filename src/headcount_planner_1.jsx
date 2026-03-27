@@ -2296,11 +2296,22 @@ export default function App({currentUser}){
   const savePlans=()=>doSave("plans",[{key:SK.planScenarios,val:planScenarios,setSaved:setSavedPS}]);
   const saveSettings=()=>doSave("settings",[{key:SHARED_SK.taxYears,val:taxYears,setSaved:setSavedTaxYears},{key:SHARED_SK.ot,val:ot,setSaved:setSavedOt}]);
   const saveStoresList=useCallback(async(storesList)=>{
-    const toSave=storesList??stores;
-    if(!toSave)return;
+    const toSave=Array.isArray(storesList)?storesList:stores;
+    if(!toSave||toSave.length===0)return;
     setSavingStores(true);
     await saveS(SHARED_SK.stores,toSave);
     setSavingStores(false);
+  },[stores]);
+
+  // Auto-save stores to D1 whenever stores state changes (debounced 1.5s)
+  const storesRef=useRef(stores);
+  storesRef.current=stores;
+  useEffect(()=>{
+    if(!stores||stores.length===0)return;
+    const t=setTimeout(async()=>{
+      await saveS(SHARED_SK.stores,storesRef.current);
+    },1500);
+    return()=>clearTimeout(t);
   },[stores]);
   const saveStoreConfig=useCallback(async(storeId,config)=>{
     setSavingStoreConfig(true);
