@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom/client'
 import { ClerkProvider, useAuth, useUser } from '@clerk/clerk-react'
 import App from './headcount_planner_1.jsx'
 import { AuthGate } from './AuthGate.jsx'
-import { UserBadge } from './UserBadge.jsx'
 import { initStorage } from './storage.js'
 import './index.css'
 
@@ -16,7 +15,7 @@ if (!CLERK_PUBLISHABLE_KEY) {
 const Loading = () => (
   <div style={{
     minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#FAF4E4', fontFamily: 'DM Sans, sans-serif', color: '#7A6A58', fontSize: 14,
+    backgroundColor: '#FAF4E4', fontFamily: "'Barlow Semi Condensed', sans-serif", color: '#7A6A58', fontSize: 14,
   }}>Loading…</div>
 )
 
@@ -55,12 +54,7 @@ function StorageInit() {
 
   if (!storageReady || !isLoaded || !user || !currentUser) return <Loading />
 
-  return (
-    <>
-      <App currentUser={currentUser} />
-      <UserBadge />
-    </>
-  )
+  return <App currentUser={currentUser} />
 }
 
 function Root() {
