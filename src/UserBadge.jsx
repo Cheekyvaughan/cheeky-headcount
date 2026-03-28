@@ -33,7 +33,7 @@ export function UserBadge() {
   const avatar = user.imageUrl
 
   const badge = (
-    <div style={{ position: 'relative', fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{ position: 'relative', fontFamily: "'Barlow Semi Condensed', sans-serif" }}>
       {/* Avatar button */}
       <button
         onClick={() => setOpen(v => !v)}
@@ -103,7 +103,7 @@ export function UserBadge() {
                 fontWeight: 600,
                 color: '#DC2626',
                 cursor: 'pointer',
-                fontFamily: "'DM Sans', sans-serif",
+                fontFamily: "'Barlow Semi Condensed', sans-serif",
               }}
               onMouseEnter={e => e.currentTarget.style.background = '#FEE2E2'}
               onMouseLeave={e => e.currentTarget.style.background = 'none'}

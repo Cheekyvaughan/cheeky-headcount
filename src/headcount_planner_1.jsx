@@ -5,6 +5,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { StoreSetupTab, DEFAULT_STORE, DEFAULT_PERIODS, AdminPeriodSetup } from "./store_setup.jsx";
+import { LandingPage } from "./LandingPage.jsx";
 
 // ── Mobile detection ──────────────────────────────────────────────
 function useIsMobile() {
@@ -2007,12 +2008,12 @@ function Sidebar({tab,navGroups,currentUser,logoUrl,setLogoUrl,isAdmin,actingAsU
       <div style={sb}>
         {/* Logo area */}
         <div style={{padding:"20px 16px 16px",borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>document.getElementById("cn-logo-upload").click()}>
-            <div style={{width:36,height:36,borderRadius:8,border:"1.5px dashed rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",backgroundColor:"rgba(255,255,255,0.06)",flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:36,height:36,borderRadius:8,border:"1.5px dashed rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",backgroundColor:"rgba(255,255,255,0.06)",flexShrink:0,cursor:"pointer"}} onClick={()=>document.getElementById("cn-logo-upload").click()}>
               {logoUrl?<img src={logoUrl} alt="Logo" style={{width:"100%",height:"100%",objectFit:"contain"}}/>:<span style={{fontSize:18,opacity:0.5}}>🏢</span>}
             </div>
             <input id="cn-logo-upload" type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>setLogoUrl(ev.target.result);reader.readAsDataURL(file);e.target.value="";}}/>
-            <div>
+            <div style={{cursor:"pointer"}} onClick={()=>tabSwitcher("home")}>
               <div style={{fontFamily:"'Bowlby One SC',sans-serif",fontWeight:800,fontSize:15,letterSpacing:"0.08em",textTransform:"uppercase",color:"rgba(255,255,255,0.9)",lineHeight:1.1}}>Cheeky Noodles</div>
               <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:1}}>Headcount Planner</div>
             </div>
@@ -2183,7 +2184,7 @@ function MobileTopBar({onMenuOpen,tab,navGroups}){
 
 // ── App ───────────────────────────────────────────────────────────
 export default function App({currentUser}){
-  const[tab,setTab]=useState("summary");
+  const[tab,setTab]=useState("home");
   const isMobile=useIsMobile();
   const SK=useMemo(()=>userSK(currentUser.id),[currentUser.id]);
   const loadDone=useRef(false);
@@ -2352,7 +2353,7 @@ export default function App({currentUser}){
 
   if(loading)return(
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",backgroundColor:CN.cream}}>
-      <div style={{color:CN.mid,fontSize:14,fontFamily:"sans-serif"}}>Loading…</div>
+      <div style={{color:CN.mid,fontSize:14,fontFamily:"'Barlow Semi Condensed',sans-serif"}}>Loading…</div>
     </div>
   );
 
@@ -2392,6 +2393,7 @@ export default function App({currentUser}){
         )}
 
         <div style={innerPad}>
+          {tab==="home"&&<LandingPage onNavigate={tabSwitcher} isAdmin={effectiveAdmin} isMobile={isMobile}/>}
           {tab==="forecast-setup"&&<StoreSetupTab
             stores={stores} setStores={setStores}
             activeStoreId={activeStoreId} setActiveStoreId={setActiveStoreId}
